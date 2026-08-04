@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FiEye, FiEyeOff, FiMail, FiLock } from "react-icons/fi";
 
-import { login } from "../services/authService";
+import { login } from "../services/authServices";
 import socket from "../../../services/socket";
 
 const LoginForm = () => {
@@ -45,9 +45,6 @@ const LoginForm = () => {
 
       // Join personal room
       socket.emit("join", response.user._id);
-
-      alert(response.message);
-
       navigate("/chat");
     } catch (error) {
       alert(error.message);
@@ -59,17 +56,13 @@ const LoginForm = () => {
   return (
     <div
       className="card shadow-lg border-0 rounded-4"
-      style={{ width: "430px" }}
+      style={{ width: "550px" }}
     >
       <div className="card-body p-5">
 
         <h2 className="fw-bold text-center mb-2">
-          Welcome Back
+          Login
         </h2>
-
-        <p className="text-center text-muted mb-4">
-          Login to continue chatting
-        </p>
 
         <form onSubmit={handleSubmit}>
 

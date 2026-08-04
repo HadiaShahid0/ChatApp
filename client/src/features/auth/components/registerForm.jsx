@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FiEye, FiEyeOff, FiUser, FiMail, FiLock } from "react-icons/fi";
-import { register } from "../services/authService";
+import { register } from "../services/authServices";
 
 const RegisterForm = () => {
   const navigate = useNavigate();
@@ -41,9 +41,7 @@ const RegisterForm = () => {
     try {
       setLoading(true);
 
-      const response = await register(formData);
-
-      alert(response.message);
+      await register(formData);
 
       navigate("/login");
     } catch (error) {
@@ -56,7 +54,7 @@ const RegisterForm = () => {
   return (
     <div
       className="card shadow-lg border-0 rounded-4"
-      style={{ width: "430px" }}
+      style={{ width: "550px" }}
     >
       <div className="card-body p-5">
         <h2 className="fw-bold text-center mb-2">Create Account</h2>

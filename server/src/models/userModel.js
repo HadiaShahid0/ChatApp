@@ -24,7 +24,10 @@ const userSchema = new mongoose.Schema(
       required: [true, "Password is required"],
       minlength: [8, "Password must be at least 8 characters"],
     },
-
+    socketId: {
+      type: String,
+      default: null,
+    },
     profileImage: {
       type: String,
       default: "",
