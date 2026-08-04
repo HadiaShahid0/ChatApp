@@ -1,6 +1,5 @@
 import User from "../../models/userModel.js";
 import { verifyToken } from "../../utils/jwt.js";
-
 const protect = async (req, res, next) => {
   try {
     // Get token from cookie

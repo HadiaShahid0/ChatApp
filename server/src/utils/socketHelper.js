@@ -1,12 +1,19 @@
+import { Server } from "socket.io";
 import User from "../models/userModel.js";
 
 const onlineUsers = new Map();
 
-const socketHelper = (io) => {
+const socketHelper = (server) => {
+  const io = new Server(server, {
+    cors: {
+      origin: "http://localhost:5173",
+      credentials: true,
+    },
+  });
+
   io.on("connection", (socket) => {
     console.log(`Socket Connected: ${socket.id}`);
 
-    // User joins after login
     socket.on("join", async (userId) => {
       try {
         socket.join(userId);
@@ -54,6 +61,8 @@ const socketHelper = (io) => {
       }
     });
   });
+
+  return io;
 };
 
 export default socketHelper;
