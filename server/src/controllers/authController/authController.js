@@ -3,7 +3,7 @@ import {
   loginService,
   verifyService,
   logoutService,
-} from "../services/authService.js";
+} from "../../services/authServices.js";
 
 // Register
 export const register = async (req, res) => {
