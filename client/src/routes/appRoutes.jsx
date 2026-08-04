@@ -5,6 +5,7 @@ import Register from "../features/auth/pages/register";
 
 import ChatPage from "../features/chat/pages/chatPage";
 import ProtectedRoute from "./protectedRoutes";
+import Profile from "../features/profile/pages/profile";
 const AppRoutes = () => {
   return (
     <Routes>
@@ -18,6 +19,14 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+  path="/profile"
+  element={
+    <ProtectedRoute>
+      <Profile />
+    </ProtectedRoute>
+  }
+/>
     </Routes>
   );
 };
