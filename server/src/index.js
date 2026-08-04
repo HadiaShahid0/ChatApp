@@ -29,8 +29,9 @@ app.use(
   cors({
     origin: "http://localhost:5173",
     credentials: true,
-  })
+  }),
 );
+app.use("/uploads", express.static(path.join(process.cwd(), "src/uploads")));
 
 routes(app);
 
@@ -41,9 +42,7 @@ const startServer = async () => {
     await connectDB();
 
     server.listen(process.env.PORT || 5000, () => {
-      console.log(
-        `Server running on port ${process.env.PORT || 5000}`
-      );
+      console.log(`Server running on port ${process.env.PORT || 5000}`);
     });
   } catch (error) {
     console.log(error.message);
