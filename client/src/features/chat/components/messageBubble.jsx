@@ -1,3 +1,5 @@
+import { BsCheck, BsCheckAll } from "react-icons/bs";
+
 const MessageBubble = ({ message, currentUser }) => {
   const isMine = message.sender._id === currentUser._id;
 
@@ -24,14 +26,25 @@ const MessageBubble = ({ message, currentUser }) => {
         }}
       >
         <div>{message.text}</div>
-
         <div
-          className={`small mt-1 text-end ${
+          className={`d-flex justify-content-end align-items-center mt-1 ${
             isMine ? "text-light" : "text-muted"
           }`}
-          style={{ fontSize: "0.70rem" }}
+          style={{ fontSize: "12px" }}
         >
-          {time}
+          <span>{time}</span>
+
+          {isMine && (
+            <span className="ms-1">
+              {message.seen ? (
+                <BsCheckAll className="text-info" />
+              ) : message.delivered ? (
+                <BsCheckAll />
+              ) : (
+                <BsCheck />
+              )}
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -37,3 +37,24 @@ export const getMessagesService = async (conversationId) => {
     .populate("sender", "-password")
     .sort({ createdAt: 1 });
 };
+
+export const markMessagesSeenService = async (
+  conversationId,
+  userId
+) => {
+  await Message.updateMany(
+    {
+      conversation: conversationId,
+      sender: { $ne: userId },
+      seen: false,
+    },
+    {
+      seen: true,
+      seenAt: new Date(),
+    }
+  );
+
+  return await Message.find({
+    conversation: conversationId,
+  });
+};

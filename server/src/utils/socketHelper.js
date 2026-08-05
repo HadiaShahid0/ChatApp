@@ -1,10 +1,9 @@
 import { Server } from "socket.io";
 import User from "../models/userModel.js";
-
+import Message from "../models/messageModal.js";
 const onlineUsers = new Map();
 
 const socketHelper = (server) => {
-
   // Initialize Socket.IO server
   const io = new Server(server, {
     cors: {
@@ -15,7 +14,7 @@ const socketHelper = (server) => {
 
   // Handle Socket.IO connections
   io.on("connection", (socket) => {
-    // Handle user joining the chat 
+    // Handle user joining the chat
     socket.on("join", async (userId) => {
       try {
         socket.join(userId);
@@ -79,6 +78,30 @@ const socketHelper = (server) => {
 
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("stopTyping");
+      }
+    });
+
+    //Handle messages seen events
+    socket.on("messagesSeen", ({ senderId, conversationId }) => {
+      const senderSocketId = onlineUsers.get(senderId);
+
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("messagesSeen", {
+          conversationId,
+        });
+      }
+    });
+    socket.on("messageDelivered", async ({ messageId, senderId }) => {
+      await Message.findByIdAndUpdate(messageId, {
+        delivered: true,
+      });
+
+      const senderSocketId = onlineUsers.get(senderId);
+
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("messageDelivered", {
+          messageId,
+        });
       }
     });
   });

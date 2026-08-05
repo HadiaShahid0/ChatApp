@@ -1,22 +1,22 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import socket from "../../../services/socket";
-import { getUsers } from "../services/chatServices";
+import { getConversations } from "../services/chatServices";
 import ChatSidebar from "../components/chatSidebar";
 import ChatWindow from "../components/chatWindow";
 
 const Chat = () => {
   const { currentUser } = useOutletContext();
-
-  const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  
 
-  const loadUsers = async () => {
+  const loadConversations = async () => {
     try {
-      const response = await getUsers();
+      const response = await getConversations();
 
       if (response.success) {
-        setUsers(response.users);
+        setConversations(response.conversations);
       }
     } catch (error) {
       console.log(error.message);
@@ -25,33 +25,50 @@ const Chat = () => {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadUsers();
+    loadConversations();
   }, []);
 
   useEffect(() => {
-    socket.on("userOnline", (userId) => {
-      setUsers((prevUsers) =>
-        prevUsers.map((user) =>
-          user._id === userId
-            ? { ...user, status: "online" }
-            : user
-        )
+    const handleUserOnline = (userId) => {
+      setConversations((prev) =>
+        prev.map((conversation) => ({
+          ...conversation,
+          participants: conversation.participants.map((participant) =>
+            participant._id === userId
+              ? { ...participant, status: "online" }
+              : participant,
+          ),
+        })),
       );
-    });
 
-    socket.on("userOffline", (userId) => {
-      setUsers((prevUsers) =>
-        prevUsers.map((user) =>
-          user._id === userId
-            ? { ...user, status: "offline" }
-            : user
-        )
+      setSelectedUser((prev) =>
+        prev && prev._id === userId ? { ...prev, status: "online" } : prev,
       );
-    });
+    };
+
+    const handleUserOffline = (userId) => {
+      setConversations((prev) =>
+        prev.map((conversation) => ({
+          ...conversation,
+          participants: conversation.participants.map((participant) =>
+            participant._id === userId
+              ? { ...participant, status: "offline" }
+              : participant,
+          ),
+        })),
+      );
+
+      setSelectedUser((prev) =>
+        prev && prev._id === userId ? { ...prev, status: "offline" } : prev,
+      );
+    };
+
+    socket.on("userOnline", handleUserOnline);
+    socket.on("userOffline", handleUserOffline);
 
     return () => {
-      socket.off("userOnline");
-      socket.off("userOffline");
+      socket.off("userOnline", handleUserOnline);
+      socket.off("userOffline", handleUserOffline);
     };
   }, []);
 
@@ -66,7 +83,8 @@ const Chat = () => {
         }}
       >
         <ChatSidebar
-          users={users}
+          conversations={conversations}
+          currentUser={currentUser}
           selectedUser={selectedUser}
           setSelectedUser={setSelectedUser}
         />
@@ -74,10 +92,7 @@ const Chat = () => {
 
       {/* Chat Window */}
       <div className="flex-grow-1 bg-light">
-        <ChatWindow
-          currentUser={currentUser}
-          selectedUser={selectedUser}
-        />
+        <ChatWindow currentUser={currentUser} selectedUser={selectedUser} />
       </div>
     </div>
   );

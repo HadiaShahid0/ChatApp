@@ -58,3 +58,4 @@ export const getAllUsersService = async (userId, search = "") => {
 
   return users;
 };
+

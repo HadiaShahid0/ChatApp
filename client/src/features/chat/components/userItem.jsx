@@ -1,9 +1,17 @@
-const UserItem = ({ user, selectedUser, setSelectedUser }) => {
-  console.log(user.profileImage);
+const UserItem = ({
+  conversation,
+  currentUser,
+  selectedUser,
+  setSelectedUser,
+}) => {
+  const user = conversation.participants.find((p) => p._id !== currentUser._id);
+
+  const lastMessage = conversation.lastMessage;
+
   return (
     <div
-      className={`d-flex align-items-center p-3 border-bottom cursor-pointer ${
-        selectedUser?._id === user._id ? "bg-muted text-black" : "bg-white"
+      className={`d-flex align-items-center p-3 border-bottom ${
+        selectedUser?._id === user._id ? "bg-light" : ""
       }`}
       style={{ cursor: "pointer" }}
       onClick={() => setSelectedUser(user)}
@@ -16,30 +24,51 @@ const UserItem = ({ user, selectedUser, setSelectedUser }) => {
                 user.name,
               )}`
         }
-        
         className="rounded-circle me-3"
         width="55"
         height="55"
+        alt={user.name}
       />
 
       <div className="flex-grow-1">
-        <div className="fw-semibold">{user.name}</div>
+        <div className="d-flex justify-content-between">
+          <strong>{user.name}</strong>
 
-        <div className="d-flex align-items-center mt-1">
-          <span
-            className={`rounded-circle me-2 ${
-              user.status === "online" ? "bg-success" : "bg-secondary"
-            }`}
-            style={{
-              width: "10px",
-              height: "10px",
-              display: "inline-block",
-            }}
-          ></span>
+          {lastMessage && (
+            <small className="text-muted">
+              {new Date(lastMessage.createdAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </small>
+          )}
+        </div>
 
-          <small className="text-muted">
-            {user.status === "online" ? "Online" : "Offline"}
+        <div className="d-flex justify-content-between align-items-center">
+          <small
+            className="text-truncate text-muted"
+            style={{ maxWidth: "170px" }}
+          >
+            {lastMessage ? lastMessage.text : "Start chatting"}
           </small>
+
+          <div className="d-flex align-items-center">
+            <span
+              className={`rounded-circle me-2 ${
+                user.status === "online" ? "bg-success" : "bg-secondary"
+              }`}
+              style={{
+                width: 10,
+                height: 10,
+              }}
+            />
+
+            {conversation.unreadCount > 0 && (
+              <span className="badge bg-success rounded-pill">
+                {conversation.unreadCount}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

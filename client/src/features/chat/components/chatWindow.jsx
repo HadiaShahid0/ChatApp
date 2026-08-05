@@ -3,6 +3,7 @@ import {
   getMessages,
   getOrCreateConversation,
   sendMessage,
+  markSeen,
 } from "../services/chatServices";
 import MessageBubble from "./messageBubble";
 import MessageInput from "./messageInput";
@@ -25,6 +26,7 @@ const ChatWindow = ({ currentUser, selectedUser }) => {
         setConversation(response.conversation);
 
         loadMessages(response.conversation._id);
+        await markSeen(response.conversation._id);
       }
     } catch (error) {
       console.log(error.message);
@@ -61,10 +63,14 @@ const ChatWindow = ({ currentUser, selectedUser }) => {
   }, [selectedUser]);
 
   useEffect(() => {
+    
     socket.on("receiveMessage", (message) => {
-      if (message.conversation._id === conversation?._id) {
-        setMessages((prev) => [...prev, message]);
-      }
+      setMessages((prev) => [...prev, message]);
+
+      socket.emit("messageDelivered", {
+        messageId: message._id,
+        senderId: message.sender._id,
+      });
     });
     socket.on("typing", () => {
       setTyping(`typing...`);
@@ -73,10 +79,29 @@ const ChatWindow = ({ currentUser, selectedUser }) => {
     socket.on("stopTyping", () => {
       setTyping("");
     });
+    socket.on("messagesSeen", ({ conversationId }) => {
+      if (conversationId === conversation?._id) {
+        setMessages((prev) =>
+          prev.map((message) => ({
+            ...message,
+            seen: true,
+          })),
+        );
+      }
+    });
+    socket.on("messageDelivered", ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message._id === messageId ? { ...message, delivered: true } : message,
+        ),
+      );
+    });
     return () => {
       socket.off("receiveMessage");
       socket.off("typing");
       socket.off("stopTyping");
+      socket.off("messagesSeen");
+      socket.off("messageDelivered");
     };
   }, [conversation]);
 
@@ -113,27 +138,27 @@ const ChatWindow = ({ currentUser, selectedUser }) => {
           />
 
           <div>
-  <h5 className="mb-0">{selectedUser.name}</h5>
+            <h5 className="mb-0">{selectedUser.name}</h5>
 
-  <div className="d-flex align-items-center gap-2 small">
-    <span
-      className={
-        selectedUser.status === "online"
-          ? "text-success"
-          : "text-secondary"
-      }
-    >
-      {selectedUser.status}
-    </span>
+            <div className="d-flex align-items-center gap-2 small">
+              <span
+                className={
+                  selectedUser.status === "online"
+                    ? "text-success"
+                    : "text-secondary"
+                }
+              >
+                {selectedUser.status}
+              </span>
 
-    {typing && (
-      <>
-        <span className="text-muted">|</span>
-        <span className="text-success">{typing}</span>
-      </>
-    )}
-  </div>
-</div>
+              {typing && (
+                <>
+                  <span className="text-muted">|</span>
+                  <span className="text-success">{typing}</span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

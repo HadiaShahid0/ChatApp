@@ -25,14 +25,24 @@ const messageSchema = new mongoose.Schema(
       default: "",
     },
 
-    isRead: {
+    seen: {
+      type: Boolean,
+      default: false,
+    },
+
+    seenAt: {
+      type: Date,
+      default: null,
+    },
+    
+    delivered: {
       type: Boolean,
       default: false,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export default mongoose.model("Message", messageSchema);

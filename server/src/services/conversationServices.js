@@ -1,5 +1,5 @@
 import Conversation from "../models/conversationModel.js";
-
+import Message from "../models/messageModal.js";
 export const createOrGetConversationService = async (
   senderId,
   receiverId
@@ -27,10 +27,33 @@ export const createOrGetConversationService = async (
 };
 
 export const getMyConversationsService = async (userId) => {
-  return await Conversation.find({
+  const conversations = await Conversation.find({
     participants: userId,
   })
     .populate("participants", "-password")
-    .populate("lastMessage")
+    .populate({
+      path: "lastMessage",
+      populate: {
+        path: "sender",
+        select: "name",
+      },
+    })
     .sort({ updatedAt: -1 });
+
+  const conversationsWithUnread = await Promise.all(
+    conversations.map(async (conversation) => {
+      const unreadCount = await Message.countDocuments({
+        conversation: conversation._id,
+        sender: { $ne: userId }, // messages sent by the other user
+        seen: false,
+      });
+
+      return {
+        ...conversation.toObject(),
+        unreadCount,
+      };
+    })
+  );
+
+  return conversationsWithUnread;
 };
