@@ -1,17 +1,36 @@
 import { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
+import { BsCameraFill } from "react-icons/bs";
 import {
   getCurrentUser,
   updateProfile,
   uploadProfileImage,
 } from "../services/profileServices";
-import { BsCameraFill } from "react-icons/bs";
-import BASE_URL from "../../../services/api";
+
 const Profile = () => {
-  const [user, setUser] = useState(null);
-  const [name, setName] = useState("");
+  const { currentUser } = useOutletContext();
+
+  const [user, setUser] = useState(currentUser);
+  const [name, setName] = useState(currentUser?.name || "");
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewImage, setPreviewImage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUser(currentUser);
+    setName(currentUser.name);
+
+    setPreviewImage(
+      currentUser.profileImage
+        ? `http://localhost:5000/${currentUser.profileImage}?t=${Date.now()}`
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            currentUser.name
+          )}&background=0D6EFD&color=fff&size=200`
+    );
+  }, [currentUser]);
 
   const loadUser = async () => {
     try {
@@ -23,23 +42,16 @@ const Profile = () => {
 
         setPreviewImage(
           response.user.profileImage
-            ? `http://localhost:5000/${response.user.profileImage.replace(
-                "src/",
-                "",
-              )}?t=${Date.now()}`
+            ? `http://localhost:5000/${response.user.profileImage}?t=${Date.now()}`
             : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                response.user.name,
-              )}&background=0D6EFD&color=fff&size=200`,
+                response.user.name
+              )}&background=0D6EFD&color=fff&size=200`
         );
       }
     } catch (error) {
       console.log(error.message);
     }
   };
-
-  useEffect(() => {
-    loadUser();
-  }, []);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -76,15 +88,14 @@ const Profile = () => {
 
   if (!user) {
     return (
-      <div className="container mt-5 text-center">
+      <div className="d-flex justify-content-center align-items-center vh-100">
         <div className="spinner-border text-primary"></div>
-        <p className="mt-3">Loading profile...</p>
       </div>
     );
   }
 
   return (
-    <div className="container d-flex align-items-center py-5 ">
+    <div className="container d-flex align-items-center py-5">
       <div className="row justify-content-center w-100">
         <div className="col-lg-8">
           <div
@@ -107,15 +118,15 @@ const Profile = () => {
                       alt="Profile"
                       className="rounded-circle shadow"
                       style={{
-                        width: "180px",
-                        height: "180px",
+                        width: "150px",
+                        height: "150px",
                         objectFit: "cover",
                         border: "5px solid white",
                       }}
                     />
 
                     <label
-                      className="btn position-absolute bg-success p-2 text-white rounded-circle outline-dark"
+                      className="btn position-absolute bg-success rounded-circle d-flex justify-content-center align-items-center"
                       style={{
                         bottom: 10,
                         right: 10,
@@ -124,7 +135,8 @@ const Profile = () => {
                         cursor: "pointer",
                       }}
                     >
-                      <BsCameraFill size={25} />
+                      <BsCameraFill size={22} />
+
                       <input
                         type="file"
                         hidden
@@ -137,25 +149,28 @@ const Profile = () => {
 
                 {/* User Info */}
                 <div className="col-md-7">
-                  <h2 className="fw-bold">{user.name}</h2>
+                  <h6 className="fw-bold">{user.name}</h6>
 
                   <p className="text-muted">{user.email}</p>
 
                   <span
                     className={`badge rounded-pill px-3 py-2 ${
-                      user.status === "online" ? "bg-success" : "bg-secondary"
+                      user.status === "online"
+                        ? "bg-success"
+                        : "bg-secondary"
                     }`}
                   >
-                    {user.status}
+                    {user.status === "online" ? "Online" : "Offline"}
                   </span>
                 </div>
               </div>
 
               <hr className="my-5" />
 
-              {/* Name */}
               <div className="mb-4">
-                <label className="form-label fw-semibold">Full Name</label>
+                <label className="form-label fw-semibold">
+                  Full Name
+                </label>
 
                 <input
                   type="text"
@@ -165,9 +180,10 @@ const Profile = () => {
                 />
               </div>
 
-              {/* Email */}
               <div className="mb-4">
-                <label className="form-label fw-semibold">Email Address</label>
+                <label className="form-label fw-semibold">
+                  Email Address
+                </label>
 
                 <input
                   type="email"
@@ -177,7 +193,6 @@ const Profile = () => {
                 />
               </div>
 
-              {/* Save Button */}
               <div className="text-center">
                 <button
                   className="btn btn-primary btn-lg px-5"

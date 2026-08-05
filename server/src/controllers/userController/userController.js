@@ -2,6 +2,7 @@ import {
   getCurrentUserService,
   updateProfileService,
   uploadProfileImageService,
+  getAllUsersService,
 } from "../../services/userServices.js";
 
 export const getCurrentUser = async (req, res) => {
@@ -22,10 +23,7 @@ export const getCurrentUser = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const user = await updateProfileService(
-      req.user._id,
-      req.body.name
-    );
+    const user = await updateProfileService(req.user._id, req.body.name);
 
     res.json({
       success: true,
@@ -45,11 +43,9 @@ export const uploadProfileImage = async (req, res) => {
     if (!req.file) {
       throw new Error("Please select an image.");
     }
+    const imagePath = `uploads/avaters/${req.file.filename}`;
 
-    const user = await uploadProfileImageService(
-      req.user._id,
-      req.file.path
-    );
+    const user = await uploadProfileImageService(req.user._id, imagePath);
 
     res.json({
       success: true,
@@ -58,6 +54,24 @@ export const uploadProfileImage = async (req, res) => {
     });
   } catch (error) {
     res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getAllUsers = async (req, res) => {
+  try {
+    const search = req.query.search || "";
+
+    const users = await getAllUsersService(req.user._id, search);
+
+    res.status(200).json({
+      success: true,
+      users,
+    });
+  } catch (error) {
+    res.status(500).json({
       success: false,
       message: error.message,
     });

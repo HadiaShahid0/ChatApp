@@ -8,6 +8,7 @@ import {
   getCurrentUser,
   updateProfile,
   uploadProfileImage,
+  getAllUsers,
 } from "../controllers/userController/userController.js";
 
 const router = express.Router();
@@ -22,5 +23,5 @@ router.put(
   upload.single("profileImage"),
   uploadProfileImage
 );
-
+router.get("/", protect, getAllUsers);
 export default router;

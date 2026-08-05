@@ -37,3 +37,24 @@ export const uploadProfileImageService = async (userId, imagePath) => {
 
   return user;
 };
+
+
+
+export const getAllUsersService = async (userId, search = "") => {
+  const query = {
+    _id: { $ne: userId },
+  };
+
+  if (search) {
+    query.name = {
+      $regex: search,
+      $options: "i",
+    };
+  }
+
+  const users = await User.find(query)
+    .select("-password")
+    .sort({ name: 1 });
+
+  return users;
+};

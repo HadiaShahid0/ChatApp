@@ -6,27 +6,23 @@ import Register from "../features/auth/pages/register";
 import ChatPage from "../features/chat/pages/chatPage";
 import ProtectedRoute from "./protectedRoutes";
 import Profile from "../features/profile/pages/profile";
+import AppLayout from "../components/layout/AppLayout";
 const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<Login />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route
-        path="/chat"
         element={
           <ProtectedRoute>
-            <ChatPage />
+            <AppLayout />
           </ProtectedRoute>
         }
-      />
-      <Route
-  path="/profile"
-  element={
-    <ProtectedRoute>
-      <Profile />
-    </ProtectedRoute>
-  }
-/>
+      >
+        <Route path="/chat" element={<ChatPage />} />
+
+        <Route path="/profile" element={<Profile />} />
+      </Route>
     </Routes>
   );
 };
