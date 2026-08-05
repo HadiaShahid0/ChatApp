@@ -1,4 +1,4 @@
-import BASE_URL from "../../../services/api";
+const BASE_URL = "http://localhost:5000/api";
 
 export const getUsers = async (search = "") => {
   const response = await fetch(
@@ -8,17 +8,10 @@ export const getUsers = async (search = "") => {
     }
   );
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message);
-  }
-
-  return data;
+  return await response.json();
 };
 
-
-export const createConversation = async (receiverId) => {
+export const getOrCreateConversation = async (receiverId) => {
   const response = await fetch(
     `${BASE_URL}/conversations`,
     {
@@ -33,28 +26,35 @@ export const createConversation = async (receiverId) => {
     }
   );
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message);
-  }
-
-  return data;
+  return await response.json();
 };
 
-export const getConversations = async () => {
+export const getMessages = async (conversationId) => {
   const response = await fetch(
-    `${BASE_URL}/conversations`,
+    `${BASE_URL}/messages/${conversationId}`,
     {
       credentials: "include",
     }
   );
 
-  const data = await response.json();
+  return await response.json();
+};
 
-  if (!response.ok) {
-    throw new Error(data.message);
-  }
+export const sendMessage = async (receiverId, text) => {
+  const response = await fetch(
+    `${BASE_URL}/messages`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        receiverId,
+        text,
+      }),
+    }
+  );
 
-  return data;
+  return await response.json();
 };

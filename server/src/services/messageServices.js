@@ -1,4 +1,4 @@
-import Message from "../models/messageModel.js";
+import Message from "../models/messageModal.js";
 import Conversation from "../models/conversationModel.js";
 import { createOrGetConversationService } from "./conversationServices.js";
 
