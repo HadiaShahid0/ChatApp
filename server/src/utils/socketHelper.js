@@ -1,9 +1,10 @@
 import { Server } from "socket.io";
 import User from "../models/userModel.js";
-
+import Message from "../models/messageModal.js";
 const onlineUsers = new Map();
 
 const socketHelper = (server) => {
+  // Initialize Socket.IO server
   const io = new Server(server, {
     cors: {
       origin: "http://localhost:5173",
@@ -11,9 +12,9 @@ const socketHelper = (server) => {
     },
   });
 
+  // Handle Socket.IO connections
   io.on("connection", (socket) => {
-    console.log(`Socket Connected: ${socket.id}`);
-
+    // Handle user joining the chat
     socket.on("join", async (userId) => {
       try {
         socket.join(userId);
@@ -33,6 +34,7 @@ const socketHelper = (server) => {
       }
     });
 
+    // Handle user disconnecting from the chat
     socket.on("disconnect", async () => {
       try {
         let disconnectedUser = null;
@@ -58,6 +60,48 @@ const socketHelper = (server) => {
         }
       } catch (error) {
         console.log(error.message);
+      }
+    });
+
+    //Handle typing events
+    socket.on("typing", ({ receiverId, sender }) => {
+      const receiverSocketId = onlineUsers.get(receiverId);
+
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("typing", sender);
+      }
+    });
+
+    //Handle stop typing events
+    socket.on("stopTyping", ({ receiverId }) => {
+      const receiverSocketId = onlineUsers.get(receiverId);
+
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("stopTyping");
+      }
+    });
+
+    //Handle messages seen events
+    socket.on("messagesSeen", ({ senderId, conversationId }) => {
+      const senderSocketId = onlineUsers.get(senderId);
+
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("messagesSeen", {
+          conversationId,
+        });
+      }
+    });
+    socket.on("messageDelivered", async ({ messageId, senderId }) => {
+      await Message.findByIdAndUpdate(messageId, {
+        delivered: true,
+      });
+
+      const senderSocketId = onlineUsers.get(senderId);
+
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("messageDelivered", {
+          messageId,
+        });
       }
     });
   });
