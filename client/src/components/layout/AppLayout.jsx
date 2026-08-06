@@ -15,27 +15,54 @@ const AppLayout = () => {
 
       if (response.success) {
         setUser(response.user);
-
-        if (!socket.connected) {
-          socket.connect();
-        }
-
-        socket.emit("join", response.user._id);
       }
     } catch (error) {
       console.log(error.message);
       navigate("/login");
     }
   };
+  useEffect(() => {
+    if (!user) return;
 
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.emit("join", user._id);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [user]);
+  // Load logged-in user
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUser();
+  }, []);
+
+  // Connect socket after user is loaded
+  useEffect(() => {
+    if (!user) return;
+
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.emit("join", user._id);
+
+    socket.on("connect", () => {
+      console.log("Socket Connected:", socket.id);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Socket Disconnected");
+    });
 
     return () => {
-      socket.off();
+      socket.off("connect");
+      socket.off("disconnect");
     };
-  }, []);
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -59,10 +86,7 @@ const AppLayout = () => {
 
   return (
     <div className="d-flex vh-100">
-      <NavigationSidebar
-        user={user}
-        onLogout={handleLogout}
-      />
+      <NavigationSidebar user={user} onLogout={handleLogout} />
 
       <div className="flex-grow-1 overflow-auto">
         <Outlet context={{ currentUser: user }} />

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import { verify } from "../features/auth/services/authServices";
-import socket from "../services/socket";
 
 const ProtectedRoute = ({ children }) => {
   const [loading, setLoading] = useState(true);
@@ -15,13 +14,6 @@ const ProtectedRoute = ({ children }) => {
         const response = await verify();
 
         setUser(response.user);
-
-        // Connect socket if not connected
-        if (!socket.connected) {
-          socket.connect();
-        }
-
-        socket.emit("join", response.user._id);
       } catch {
         setUser(null);
       } finally {

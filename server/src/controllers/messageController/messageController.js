@@ -4,35 +4,38 @@ import {
   markMessagesSeenService,
 } from "../../services/messageServices.js";
 import { onlineUsers } from "../../utils/socketHelper.js";
-
 export const sendMessage = async (req, res) => {
   try {
     const { receiverId, text } = req.body;
 
-    if (!receiverId || !text?.trim()) {
-      throw new Error("Receiver and message are required.");
+    if (!receiverId) {
+      throw new Error("Receiver is required.");
+    }
+
+    const image = req.file ? `uploads/chat/${req.file.filename}` : "";
+
+    if (!text?.trim() && !image) {
+      throw new Error("Message or image is required.");
     }
 
     const message = await sendMessageService(
       req.user._id,
       receiverId,
-      text.trim(),
+      text || "",
+      image,
     );
 
-    // Get Socket.IO instance
     const io = req.app.get("io");
 
-    // Find receiver's socket
-    const receiverSocketId = onlineUsers.get(receiverId);
+    const receiverSocketId = onlineUsers.get(receiverId.toString());
 
-    // Send message instantly if receiver is online
+    // Send only to receiver
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("receiveMessage", message);
     }
 
     res.status(201).json({
       success: true,
-      message: "Message sent successfully.",
       data: message,
     });
   } catch (error) {
@@ -42,6 +45,7 @@ export const sendMessage = async (req, res) => {
     });
   }
 };
+
 
 export const getMessages = async (req, res) => {
   try {
@@ -65,20 +69,17 @@ export const markMessagesSeen = async (req, res) => {
   try {
     const messages = await markMessagesSeenService(
       req.params.conversationId,
-      req.user._id
+      req.user._id,
     );
 
     const senderMessage = messages.find(
-      (message) =>
-        message.sender.toString() !== req.user._id.toString()
+      (message) => message.sender.toString() !== req.user._id.toString(),
     );
 
     if (senderMessage) {
       const io = req.app.get("io");
 
-      const senderSocketId = onlineUsers.get(
-        senderMessage.sender.toString()
-      );
+      const senderSocketId = onlineUsers.get(senderMessage.sender.toString());
 
       if (senderSocketId) {
         io.to(senderSocketId).emit("messagesSeen", {

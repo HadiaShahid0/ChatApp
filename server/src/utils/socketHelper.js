@@ -64,20 +64,25 @@ const socketHelper = (server) => {
     });
 
     //Handle typing events
-    socket.on("typing", ({ receiverId, sender }) => {
-      const receiverSocketId = onlineUsers.get(receiverId);
+    socket.on("typing", ({ receiverId, senderId, sender }) => {
+      const receiverSocket = onlineUsers.get(receiverId);
 
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit("typing", sender);
+      if (receiverSocket) {
+        io.to(receiverSocket).emit("typing", {
+          senderId,
+          sender,
+        });
       }
     });
 
     //Handle stop typing events
-    socket.on("stopTyping", ({ receiverId }) => {
-      const receiverSocketId = onlineUsers.get(receiverId);
+    socket.on("stopTyping", ({ receiverId, senderId }) => {
+      const receiverSocket = onlineUsers.get(receiverId);
 
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit("stopTyping");
+      if (receiverSocket) {
+        io.to(receiverSocket).emit("stopTyping", {
+          senderId,
+        });
       }
     });
 
@@ -91,19 +96,30 @@ const socketHelper = (server) => {
         });
       }
     });
-    socket.on("messageDelivered", async ({ messageId, senderId }) => {
-      await Message.findByIdAndUpdate(messageId, {
-        delivered: true,
-      });
+   socket.on("messageDelivered", async ({ messageId, senderId }) => {
+  console.log("======== DELIVERED ========");
+  console.log("messageId:", messageId);
+  console.log("senderId:", senderId);
+  console.log("onlineUsers:", [...onlineUsers.entries()]);
 
-      const senderSocketId = onlineUsers.get(senderId);
+  await Message.findByIdAndUpdate(messageId, {
+    delivered: true,
+  });
 
-      if (senderSocketId) {
-        io.to(senderSocketId).emit("messageDelivered", {
-          messageId,
-        });
-      }
+  const senderSocketId = onlineUsers.get(senderId);
+
+  console.log("senderSocketId:", senderSocketId);
+
+  if (senderSocketId) {
+    console.log("Sending delivered event");
+
+    io.to(senderSocketId).emit("messageDelivered", {
+      messageId,
     });
+  } else {
+    console.log("Sender socket not found");
+  }
+});
   });
 
   return io;

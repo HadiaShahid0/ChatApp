@@ -2,7 +2,12 @@ import { useState } from "react";
 import SearchBar from "./searchBar";
 import UserItem from "./userItem";
 
-const ChatSidebar = ({ conversations, currentUser, selectedUser, setSelectedUser }) => {
+const ChatSidebar = ({
+  conversations,
+  currentUser,
+  selectedUser,
+  setSelectedUser,
+}) => {
   const [search, setSearch] = useState("");
 
   const filtered = conversations.filter((conversation) => {
@@ -17,15 +22,15 @@ const ChatSidebar = ({ conversations, currentUser, selectedUser, setSelectedUser
       <SearchBar search={search} setSearch={setSearch} />
 
       <div style={{ overflowY: "auto", height: "92vh" }}>
-       {filtered.map((conversation) => (
-    <UserItem
-        key={conversation._id}
-        conversation={conversation}
-        currentUser={currentUser}
-        selectedUser={selectedUser}
-        setSelectedUser={setSelectedUser}
-    />
-))}
+        {filtered.map((conversation) => (
+          <UserItem
+            key={conversation._id}
+            conversation={conversation}
+            currentUser={currentUser}
+            selectedUser={selectedUser}
+            setSelectedUser={setSelectedUser}
+          />
+        ))}
       </div>
     </>
   );

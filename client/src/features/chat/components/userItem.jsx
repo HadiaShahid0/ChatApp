@@ -58,11 +58,12 @@ const UserItem = ({
                 user.status === "online" ? "bg-success" : "bg-secondary"
               }`}
               style={{
-                width: 10,
-                height: 10,
+                width: 15,
+                height: 15,
               }}
             />
 
+          
             {conversation.unreadCount > 0 && (
               <span className="badge bg-success rounded-pill">
                 {conversation.unreadCount}
