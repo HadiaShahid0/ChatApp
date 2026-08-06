@@ -25,7 +25,21 @@ const MessageBubble = ({ message, currentUser }) => {
           wordBreak: "break-word",
         }}
       >
-        <div>{message.text}</div>
+        <>
+          {message.image && (
+            <img
+              src={`http://localhost:5000/${message.image}`}
+              alt="Chat"
+              className="img-fluid rounded mb-2"
+              style={{
+                maxWidth: "250px",
+                cursor: "pointer",
+              }}
+            />
+          )}
+
+          {message.text && <div>{message.text}</div>}
+        </>
         <div
           className={`d-flex justify-content-end align-items-center mt-1 ${
             isMine ? "text-light" : "text-muted"
@@ -45,6 +59,7 @@ const MessageBubble = ({ message, currentUser }) => {
               )}
             </span>
           )}
+          
         </div>
       </div>
     </div>

@@ -9,7 +9,6 @@ const Chat = () => {
   const { currentUser } = useOutletContext();
   const [selectedUser, setSelectedUser] = useState(null);
   const [conversations, setConversations] = useState([]);
-  
 
   const loadConversations = async () => {
     try {
@@ -92,7 +91,12 @@ const Chat = () => {
 
       {/* Chat Window */}
       <div className="flex-grow-1 bg-light">
-        <ChatWindow currentUser={currentUser} selectedUser={selectedUser} />
+        <ChatWindow
+          currentUser={currentUser}
+          selectedUser={selectedUser}
+          conversations={conversations}
+          setConversations={setConversations}
+        />
       </div>
     </div>
   );

@@ -52,16 +52,26 @@ export const sendMessage = async (receiverId, text) => {
 
   return await response.json();
 };
-export const markSeen = async (
-  conversationId
-) => {
-  const response = await fetch(
-    `${BASE_URL}/messages/seen/${conversationId}`,
-    {
-      method: "PUT",
-      credentials: "include",
-    }
-  );
+export const markSeen = async (conversationId) => {
+  const response = await fetch(`${BASE_URL}/messages/seen/${conversationId}`, {
+    method: "PUT",
+    credentials: "include",
+  });
+
+  return await response.json();
+};
+
+export const sendImage = async (receiverId, image) => {
+  const formData = new FormData();
+
+  formData.append("receiverId", receiverId);
+  formData.append("image", image);
+
+  const response = await fetch(`${BASE_URL}/messages`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
 
   return await response.json();
 };
