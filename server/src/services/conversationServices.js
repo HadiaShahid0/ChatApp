@@ -29,6 +29,7 @@ export const createOrGetConversationService = async (
 export const getMyConversationsService = async (userId) => {
   const conversations = await Conversation.find({
     participants: userId,
+    isGroup: false,
   })
     .populate("participants", "-password")
     .populate({
@@ -57,3 +58,5 @@ export const getMyConversationsService = async (userId) => {
 
   return conversationsWithUnread;
 };
+
+

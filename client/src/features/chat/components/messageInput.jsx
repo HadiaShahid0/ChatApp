@@ -3,7 +3,7 @@ import socket from "../../../services/socket";
 import { BsImage, BsX } from "react-icons/bs";
 import { sendImage } from "../services/chatServices";
 
-const MessageInput = ({ onSend, selectedUser, currentUser }) => {
+const MessageInput = ({ onSend,onImageSend, selectedUser, currentUser }) => {
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [preview, setPreview] = useState("");
@@ -32,7 +32,6 @@ const MessageInput = ({ onSend, selectedUser, currentUser }) => {
       // Send image if selected
       if (selectedImage) {
         const response = await sendImage(selectedUser._id, selectedImage);
-
         if (response.success) {
           removeImage();
         }

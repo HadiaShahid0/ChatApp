@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { BsCheck, BsCheckAll } from "react-icons/bs";
 
-const MessageBubble = ({ message, currentUser }) => {
+const MessageBubble = ({ message, currentUser ,isGroup}) => {
   const [showImage, setShowImage] = useState(false);
 
   const isMine = message.sender?._id === currentUser._id;
@@ -29,6 +29,20 @@ const MessageBubble = ({ message, currentUser }) => {
             wordBreak: "break-word",
           }}
         >
+          {/* Group sender name */}
+          {isGroup && !isMine && (
+            <div
+              className="fw-bold mb-2"
+              style={{
+                color: "#0d6efd",
+                fontSize: "13px",
+              }}
+            >
+              {message.sender?.name}
+            </div>
+          )}
+
+          {/* Image */}
           {message.image && (
             <img
               src={`http://localhost:5000/${message.image}`}
@@ -42,8 +56,10 @@ const MessageBubble = ({ message, currentUser }) => {
             />
           )}
 
+          {/* Text */}
           {message.text && <div>{message.text}</div>}
 
+          {/* Time + Status */}
           <div
             className={`d-flex justify-content-end align-items-center mt-1 ${
               isMine ? "text-light" : "text-muted"
@@ -67,12 +83,12 @@ const MessageBubble = ({ message, currentUser }) => {
         </div>
       </div>
 
-      {/* Image Preview */}
+      {/* Full Screen Image Preview */}
       {showImage && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
           style={{
-            background: "rgba(0,0,0,0.9)",
+            background: "rgba(0,0,0,.92)",
             zIndex: 9999,
           }}
           onClick={() => setShowImage(false)}

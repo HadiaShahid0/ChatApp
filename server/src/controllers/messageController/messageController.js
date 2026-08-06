@@ -27,11 +27,17 @@ export const sendMessage = async (req, res) => {
 
     const io = req.app.get("io");
 
-    const receiverSocketId = onlineUsers.get(receiverId.toString());
+    if (message.conversation.isGroup) {
+      io.to(message.conversation._id.toString()).emit(
+        "newGroupMessage",
+        message,
+      );
+    } else {
+      const receiverSocketId = onlineUsers.get(receiverId.toString());
 
-    // Send only to receiver
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("receiveMessage", message);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("receiveMessage", message);
+      }
     }
 
     res.status(201).json({
@@ -45,7 +51,6 @@ export const sendMessage = async (req, res) => {
     });
   }
 };
-
 
 export const getMessages = async (req, res) => {
   try {

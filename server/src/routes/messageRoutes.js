@@ -5,17 +5,13 @@ import {
   getMessages,
   markMessagesSeen,
 } from "../controllers/messageController/messageController.js";
-import upload from "../middleware/uploadMiddleware/uploadChatImage.js";
+import { createMulter } from "../middleware/uploadMiddleware/multer.js";
 const router = express.Router();
-
+const chatUpload = createMulter("chat");
 // Send Message
-router.post("/", protect, upload.single("image"), sendMessage);
+router.post("/", protect, chatUpload.single("image"), sendMessage);
 
 // Get Conversation Messages
 router.get("/:conversationId", protect, getMessages);
-router.put(
-  "/seen/:conversationId",
-  protect,
-  markMessagesSeen
-);
+router.put("/seen/:conversationId", protect, markMessagesSeen);
 export default router;

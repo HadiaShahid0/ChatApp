@@ -43,7 +43,7 @@ export const uploadProfileImage = async (req, res) => {
     if (!req.file) {
       throw new Error("Please select an image.");
     }
-    const imagePath = `uploads/avaters/${req.file.filename}`;
+    const imagePath = `uploads/profileAvatars/${req.file.filename}`;
 
     const user = await uploadProfileImageService(req.user._id, imagePath);
 

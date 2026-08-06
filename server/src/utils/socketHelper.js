@@ -1,10 +1,11 @@
 import { Server } from "socket.io";
 import User from "../models/userModel.js";
 import Message from "../models/messageModal.js";
+import Conversation from "../models/conversationModel.js";
+
 const onlineUsers = new Map();
 
 const socketHelper = (server) => {
-  // Initialize Socket.IO server
   const io = new Server(server, {
     cors: {
       origin: "http://localhost:5173",
@@ -12,11 +13,13 @@ const socketHelper = (server) => {
     },
   });
 
-  // Handle Socket.IO connections
   io.on("connection", (socket) => {
-    // Handle user joining the chat
+    // =========================
+    // USER JOIN
+    // =========================
     socket.on("join", async (userId) => {
       try {
+        // Personal room
         socket.join(userId);
 
         onlineUsers.set(userId, socket.id);
@@ -26,15 +29,27 @@ const socketHelper = (server) => {
           socketId: socket.id,
         });
 
+        // Join all group rooms
+        const groups = await Conversation.find({
+          participants: userId,
+          isGroup: true,
+        }).select("_id");
+
+        groups.forEach((group) => {
+          socket.join(group._id.toString());
+        });
+
         io.emit("userOnline", userId);
 
         console.log(`${userId} joined`);
-      } catch (error) {
-        console.log(error.message);
+      } catch (err) {
+        console.log(err.message);
       }
     });
 
-    // Handle user disconnecting from the chat
+    // =========================
+    // DISCONNECT
+    // =========================
     socket.on("disconnect", async () => {
       try {
         let disconnectedUser = null;
@@ -58,12 +73,96 @@ const socketHelper = (server) => {
 
           console.log(`${disconnectedUser} disconnected`);
         }
-      } catch (error) {
-        console.log(error.message);
+      } catch (err) {
+        console.log(err.message);
       }
     });
 
-    //Handle typing events
+    // =========================
+    // GROUP EVENTS
+    // =========================
+
+    socket.on("joinGroup", ({ groupId }) => {
+      socket.join(groupId);
+
+      console.log(`Socket ${socket.id} joined group ${groupId}`);
+    });
+
+    socket.on("leaveGroup", ({ groupId }) => {
+      socket.leave(groupId);
+
+      console.log(`Socket ${socket.id} left group ${groupId}`);
+    });
+
+    // Add member to group room
+    socket.on("addMember", async ({ groupId, memberId }) => {
+      const group = await Conversation.findById(groupId)
+        .populate("participants", "name profileImage status")
+        .populate("admin", "name profileImage")
+        .populate({
+          path: "lastMessage",
+          populate: {
+            path: "sender",
+            select: "name profileImage",
+          },
+        });
+
+      const memberSocketId = onlineUsers.get(memberId);
+
+      if (memberSocketId) {
+        const memberSocket = io.sockets.sockets.get(memberSocketId);
+
+        if (memberSocket) {
+          memberSocket.join(groupId);
+
+          memberSocket.emit("addedToGroup", {
+            group,
+          });
+        }
+      }
+
+      io.to(groupId).emit("memberAdded", {
+        group,
+      });
+    });
+
+    socket.on("removeMember", async ({ groupId, memberId }) => {
+      const group = await Conversation.findById(groupId)
+        .populate("participants", "name profileImage status")
+        .populate("admin", "name profileImage");
+
+      const memberSocketId = onlineUsers.get(memberId);
+
+      if (memberSocketId) {
+        const memberSocket = io.sockets.sockets.get(memberSocketId);
+
+        if (memberSocket) {
+          memberSocket.leave(groupId);
+
+          // Tell removed user
+          memberSocket.emit("removedFromGroup", {
+            groupId,
+          });
+        }
+      }
+
+      // Tell everyone still in the group
+      io.to(groupId).emit("memberRemoved", {
+        group,
+      });
+    });
+
+    // New group message
+    socket.on("newGroupMessage", ({ groupId, message }) => {
+      // Send message to all group members except sender
+      socket.to(groupId).emit("newGroupMessage", message);
+
+      console.log(`New message sent in group ${groupId}`);
+    });
+
+    // =========================
+    // TYPING
+    // =========================
     socket.on("typing", ({ receiverId, senderId, sender }) => {
       const receiverSocket = onlineUsers.get(receiverId);
 
@@ -75,7 +174,6 @@ const socketHelper = (server) => {
       }
     });
 
-    //Handle stop typing events
     socket.on("stopTyping", ({ receiverId, senderId }) => {
       const receiverSocket = onlineUsers.get(receiverId);
 
@@ -86,40 +184,39 @@ const socketHelper = (server) => {
       }
     });
 
-    //Handle messages seen events
+    // =========================
+    // MESSAGE SEEN
+    // =========================
     socket.on("messagesSeen", ({ senderId, conversationId }) => {
-      const senderSocketId = onlineUsers.get(senderId);
+      const senderSocket = onlineUsers.get(senderId);
 
-      if (senderSocketId) {
-        io.to(senderSocketId).emit("messagesSeen", {
+      if (senderSocket) {
+        io.to(senderSocket).emit("messagesSeen", {
           conversationId,
         });
       }
     });
-   socket.on("messageDelivered", async ({ messageId, senderId }) => {
-  console.log("======== DELIVERED ========");
-  console.log("messageId:", messageId);
-  console.log("senderId:", senderId);
-  console.log("onlineUsers:", [...onlineUsers.entries()]);
 
-  await Message.findByIdAndUpdate(messageId, {
-    delivered: true,
-  });
+    // =========================
+    // MESSAGE DELIVERED
+    // =========================
+    socket.on("messageDelivered", async ({ messageId, senderId }) => {
+      try {
+        await Message.findByIdAndUpdate(messageId, {
+          delivered: true,
+        });
 
-  const senderSocketId = onlineUsers.get(senderId);
+        const senderSocket = onlineUsers.get(senderId);
 
-  console.log("senderSocketId:", senderSocketId);
-
-  if (senderSocketId) {
-    console.log("Sending delivered event");
-
-    io.to(senderSocketId).emit("messageDelivered", {
-      messageId,
+        if (senderSocket) {
+          io.to(senderSocket).emit("messageDelivered", {
+            messageId,
+          });
+        }
+      } catch (err) {
+        console.log(err.message);
+      }
     });
-  } else {
-    console.log("Sender socket not found");
-  }
-});
   });
 
   return io;
