@@ -81,3 +81,30 @@ export const removeMemberService = async (groupId, memberId) => {
     .populate("admin", "name");
 };
 
+export const sendGroupMessageService = async (
+    senderId,
+    groupId,
+    text,
+    image
+) => {
+
+    const conversation = await Conversation.findById(groupId);
+
+    if (!conversation || !conversation.isGroup) {
+        throw new Error("Group not found");
+    }
+
+    const message = await Message.create({
+        conversation: groupId,
+        sender: senderId,
+        text,
+        image,
+    });
+
+    conversation.lastMessage = message._id;
+    await conversation.save();
+
+    return await Message.findById(message._id)
+        .populate("sender", "-password")
+        .populate("conversation");
+};

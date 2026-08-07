@@ -2,7 +2,7 @@ import { useState,useEffect } from "react";
 import socket from "../../../services/socket";
 import { BsImage, BsX } from "react-icons/bs";
 
-const MessageInput = ({ onSend, onImageSend, selectedUser, currentUser }) => {
+const MessageInput = ({ onSend, onImageSend, selectedUser, currentUser,conversation }) => {
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [preview, setPreview] = useState("");
@@ -21,11 +21,12 @@ const handleChange = (e) => {
     return;
   }
 
-  socket.emit("typing", {
-    receiverId: selectedUser._id,
+  socket.emit("typing",{
+    receiverId: conversation.isGroup ? null : selectedUser._id,
+    groupId: conversation.isGroup ? conversation._id : null,
     senderId: currentUser._id,
-    sender: currentUser.name,
-  });
+    sender: currentUser.name
+});
 
   window.typingTimer = setTimeout(() => {
     socket.emit("stopTyping", {

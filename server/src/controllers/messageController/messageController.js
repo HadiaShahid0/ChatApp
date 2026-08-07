@@ -4,12 +4,13 @@ import {
   markMessagesSeenService,
 } from "../../services/messageServices.js";
 import { onlineUsers } from "../../utils/socketHelper.js";
+
 export const sendMessage = async (req, res) => {
   try {
-    const { receiverId, text } = req.body;
+    const { receiverId, groupId, text } = req.body;
 
-    if (!receiverId) {
-      throw new Error("Receiver is required.");
+    if (!receiverId && !groupId) {
+      throw new Error("Receiver or Group is required.");
     }
 
     const image = req.file ? `uploads/chat/${req.file.filename}` : "";
@@ -23,16 +24,19 @@ export const sendMessage = async (req, res) => {
       receiverId,
       text || "",
       image,
+      groupId,
     );
 
     const io = req.app.get("io");
 
     if (message.conversation.isGroup) {
+      // Send to everyone in the group room
       io.to(message.conversation._id.toString()).emit(
-        "newGroupMessage",
+        "receiveMessage",
         message,
       );
     } else {
+      // Send only to receiver
       const receiverSocketId = onlineUsers.get(receiverId.toString());
 
       if (receiverSocketId) {
@@ -77,21 +81,29 @@ export const markMessagesSeen = async (req, res) => {
       req.user._id,
     );
 
-    const senderMessage = messages.find(
-      (message) => message.sender.toString() !== req.user._id.toString(),
-    );
+    const io = req.app.get("io");
 
-    if (senderMessage) {
-      const io = req.app.get("io");
+    // Notify every sender whose message was just seen
+    const senderIds = [
+      ...new Set(
+        messages
+          .filter(
+            (msg) => msg.sender.toString() !== req.user._id.toString(),
+          )
+          .map((msg) => msg.sender.toString()),
+      ),
+    ];
 
-      const senderSocketId = onlineUsers.get(senderMessage.sender.toString());
+    senderIds.forEach((senderId) => {
+      const senderSocketId = onlineUsers.get(senderId);
 
       if (senderSocketId) {
         io.to(senderSocketId).emit("messagesSeen", {
           conversationId: req.params.conversationId,
+          seenBy: req.user._id,
         });
       }
-    }
+    });
 
     res.json({
       success: true,

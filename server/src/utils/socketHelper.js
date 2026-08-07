@@ -163,7 +163,18 @@ const socketHelper = (server) => {
     // =========================
     // TYPING
     // =========================
-    socket.on("typing", ({ receiverId, senderId, sender }) => {
+    socket.on("typing", ({ receiverId, senderId, sender, groupId }) => {
+      // If groupId is provided, emit typing to the group room
+      if (groupId) {
+        io.to(groupId).emit("typing", {
+          groupId,
+          senderId,
+          sender,
+        });
+        return;
+      }
+
+      // Otherwise emit to the receiver's personal socket
       const receiverSocket = onlineUsers.get(receiverId);
 
       if (receiverSocket) {
@@ -200,21 +211,33 @@ const socketHelper = (server) => {
     // =========================
     // MESSAGE DELIVERED
     // =========================
-    socket.on("messageDelivered", async ({ messageId, senderId }) => {
+    socket.on("messageDelivered", async ({ messageId, userId }) => {
       try {
-        await Message.findByIdAndUpdate(messageId, {
-          delivered: true,
-        });
+        const message =
+          await Message.findById(messageId).populate("conversation");
 
-        const senderSocket = onlineUsers.get(senderId);
+        if (!message) return;
+
+        // Don't add duplicate ids
+        if (
+  !message.deliveredTo.some(
+    (id) => id.toString() === userId.toString()
+  )
+) {
+  message.deliveredTo.push(userId);
+  await message.save();
+}
+
+        const senderSocket = onlineUsers.get(message.sender.toString());
 
         if (senderSocket) {
           io.to(senderSocket).emit("messageDelivered", {
             messageId,
+            deliveredTo: message.deliveredTo,
           });
         }
       } catch (err) {
-        console.log(err.message);
+        console.log(err);
       }
     });
   });

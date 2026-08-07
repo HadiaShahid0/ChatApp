@@ -3,6 +3,7 @@ import {
   getGroupsService,
   addMemberService,
   removeMemberService,
+  sendGroupMessageService
 } from "../../services/groupServices.js";
 
 export const createGroup = async (req, res) => {
@@ -88,4 +89,39 @@ export const removeMember = async (req, res) => {
       message: error.message,
     });
   }
+};
+export const sendGroupMessage = async (req, res) => {
+    try {
+
+        const { groupId } = req.params;
+        const { text } = req.body;
+
+        const image = req.file
+            ? `uploads/chat/${req.file.filename}`
+            : "";
+
+        const message = await sendGroupMessageService(
+            req.user._id,
+            groupId,
+            text || "",
+            image
+        );
+
+        const io = req.app.get("io");
+
+        io.to(groupId).emit("newGroupMessage", message);
+
+        res.status(201).json({
+            success: true,
+            data: message,
+        });
+
+    } catch (err) {
+
+        res.status(400).json({
+            success: false,
+            message: err.message,
+        });
+
+    }
 };

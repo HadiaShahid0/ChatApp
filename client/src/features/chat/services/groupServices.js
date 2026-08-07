@@ -1,37 +1,16 @@
-import BASE_URL from "../../../services/api.js";
+import BASE_URL from "../../../services/api";
 
 /* --------------------------
-   SEND GROUP MESSAGE
+   GET MY GROUPS
 --------------------------- */
-export const sendGroupMessage = async (groupId, text, image = null) => {
-  const formData = new FormData();
-
-  formData.append("text", text);
-
-  if (image) {
-    formData.append("image", image);
-  }
-
-  const res = await fetch(`${BASE_URL}/messages/group/${groupId}`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  });
-
-  return await res.json();
-};
-
-
-/* --------------------------
-   GROUP DETAILS
---------------------------- */
-export const getGroups = async (groupId) => {
-  const res = await fetch(`${BASE_URL}/groups/${groupId}`, {
+export const getGroups = async () => {
+  const res = await fetch(`${BASE_URL}/groups`, {
     credentials: "include",
   });
 
   return await res.json();
 };
+
 /* --------------------------
    CREATE GROUP
 --------------------------- */
@@ -72,13 +51,11 @@ export const removeMember = async (groupId, memberId) => {
     {
       method: "PUT",
       credentials: "include",
-    }
+    },
   );
 
   return await res.json();
 };
-
-
 
 /* --------------------------
    LEAVE GROUP
@@ -105,7 +82,7 @@ export const deleteGroup = async (groupId) => {
 };
 
 /* --------------------------
-   UPDATE GROUP INFO
+   UPDATE GROUP
 --------------------------- */
 export const updateGroup = async (groupId, formData) => {
   const res = await fetch(`${BASE_URL}/groups/${groupId}`, {

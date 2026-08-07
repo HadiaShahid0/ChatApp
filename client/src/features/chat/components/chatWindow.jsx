@@ -6,7 +6,7 @@ import {
   sendImage,
   markSeen,
 } from "../services/chatServices";
-import { sendGroupMessage, getGroups } from "../services/groupServices";
+
 import MessageBubble from "./messageBubble";
 import MessageInput from "./messageInput";
 import socket from "../../../services/socket";
@@ -23,7 +23,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       const response = await getMessages(conversationId);
 
       if (response.success) {
-        setMessages(response.messages);
+        setMessages(response.messages || []);
       }
     } catch (error) {
       console.log(error.message);
@@ -106,13 +106,11 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
   const handleSend = async (text) => {
     try {
-      let response;
-
-      if (conversation.isGroup) {
-        response = await sendGroupMessage(conversation._id, text);
-      } else {
-        response = await sendMessage(selectedUser._id, text);
-      }
+      const response = await sendMessage({
+        receiverId: conversation.isGroup ? null : selectedUser._id,
+        groupId: conversation.isGroup ? conversation._id : null,
+        text,
+      });
 
       if (!response.success) return;
 
@@ -120,21 +118,24 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
       updateConversation(response.data);
 
-      // Notify other group members
-      if (conversation.isGroup) {
-        socket.emit("newGroupMessage", {
-          groupId: conversation._id,
-          message: response.data,
-        });
-      }
+      // // Notify other group members
+      // if (conversation.isGroup) {
+      //   socket.emit("newGroupMessage", {
+      //     groupId: conversation._id,
+      //     message: response.data,
+      //   });
+      // }
     } catch (err) {
       console.log(err);
     }
   };
   const handleImageSend = async (file) => {
     try {
-      const response = await sendImage(selectedUser._id, file);
-
+      const response = await sendImage({
+        receiverId: conversation.isGroup ? null : selectedUser._id,
+        groupId: conversation.isGroup ? conversation._id : null,
+        image: file,
+      });
       if (!response.success) return;
 
       // Show image immediately
@@ -181,160 +182,129 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
     };
   }, [selectedUser?._id]);
   useEffect(() => {
-    const groupUpdatedHandler = async ({ groupId }) => {
-      const res = await getGroups();
-      if (!res.success) return;
+    const groupUpdatedHandler = ({ group }) => {
+      updateGroupConversation(group);
 
-      const updatedGroup = res.groups.find((g) => g._id === groupId);
-      if (!updatedGroup) return;
-
-      updateGroupConversation(updatedGroup); // always update sidebar
-
-      if (conversation?._id === groupId) {
-        setConversation(updatedGroup); // only update open window if relevant
+      if (conversation?._id === group._id) {
+        setConversation(group);
       }
     };
-
     // Socket event listeners for events like receiving messages, typing indicators, and message delivery confirmations
     const receiveMessage = async (message) => {
       updateConversation(message);
-
-      // Tell sender the message reached this client
+      if (message.sender._id === currentUser._id) {
+        return;
+      }
       if (message.sender._id !== currentUser._id) {
         socket.emit("messageDelivered", {
           messageId: message._id,
-          senderId: message.sender._id,
+          userId: currentUser._id,
         });
       }
 
-      // Don't show it in current chat if another conversation is open
-      if (conversation?._id !== message.conversation._id) {
-        return;
-      }
-
-      setMessages((prev) => {
-        if (prev.some((m) => m._id === message._id)) {
-          return prev;
-        }
-
-        return [...prev, message];
-      });
-
-      // Current conversation is open, therefore message is seen
-      if (message.sender._id !== currentUser._id) {
-        await markSeen(message.conversation._id);
-
-        socket.emit("messagesSeen", {
-          senderId: message.sender._id,
-          conversationId: message.conversation._id,
-        });
-      }
-    };
-
-    const typingHandler = ({ senderId }) => {
-      if (!conversation || conversation.isGroup) return;
-
-      if (selectedUser?._id !== senderId) return;
-
-      setTyping("typing...");
-    };
-
-    const stopTypingHandler = ({ senderId }) => {
-      if (selectedUser?._id === senderId) {
-        setTyping("");
-      }
-    };
-
-    const seenHandler = ({ conversationId }) => {
-      if (conversationId !== conversation?._id) return;
-
-      setMessages((prev) =>
-        prev.map((msg) => ({
-          ...msg,
-          seen: true,
-        })),
-      );
-    };
-
-    const deliveredHandler = ({ messageId }) => {
-      console.log("Sender received delivered:", messageId);
-
-      setMessages((prev) => {
-        console.log("Current messages:", prev);
-
-        const updated = prev.map((msg) =>
-          msg._id === messageId ? { ...msg, delivered: true } : msg,
-        );
-
-        console.log("Updated messages:", updated);
-
-        return updated;
-      });
-    };
-    const newGroupMessageHandler = async (message) => {
-      // Update sidebar
-      setConversations((prev) => {
-        const updated = prev.map((conv) =>
-          conv._id === message.conversation._id
-            ? {
-                ...conv,
-                lastMessage: message,
-                unreadCount:
-                  message.sender._id === currentUser._id
-                    ? conv.unreadCount || 0
-                    : conversation?._id === conv._id
-                      ? 0
-                      : (conv.unreadCount || 0) + 1,
-              }
-            : conv,
-        );
-
-        updated.sort(
-          (a, b) =>
-            new Date(b.lastMessage?.createdAt || b.updatedAt) -
-            new Date(a.lastMessage?.createdAt || a.updatedAt),
-        );
-
-        return updated;
-      });
-
-      // If another group is open, don't append the message
       if (conversation?._id !== message.conversation._id) return;
 
       setMessages((prev) => {
         if (prev.some((m) => m._id === message._id)) return prev;
-
         return [...prev, message];
       });
 
-      // Mark as seen if this group is open
-      if (message.sender._id !== currentUser._id) {
-        await markSeen(message.conversation._id);
+     if (
+    conversation?._id === message.conversation._id &&
+    document.visibilityState === "visible"
+) {
+    await markSeen(message.conversation._id);
 
-        socket.emit("messageDelivered", {
-          messageId: message._id,
-          senderId: message.sender._id,
-        });
-      }
+    socket.emit("messagesSeen", {
+        conversationId: message.conversation._id,
+        userId: currentUser._id,
+    });
+}
     };
-    const memberAddedHandler = ({ group }) => {
-    setConversations(prev => {
 
-        const exists = prev.some(c => c._id === group._id);
+    const typingHandler = ({ senderId, groupId, sender }) => {
+      if (!conversation) return;
+
+      // Private chat
+      if (!conversation.isGroup) {
+        if (selectedUser?._id !== senderId) return;
+        setTyping("typing...");
+        return;
+      }
+
+      // Group chat
+      if (conversation._id !== groupId) return;
+
+      if (senderId === currentUser._id) return;
+
+      setTyping(`${sender} is typing...`);
+    };
+    const stopTypingHandler = ({ senderId, groupId }) => {
+      if (!conversation) return;
+
+      if (!conversation.isGroup) {
+        if (selectedUser?._id === senderId) setTyping("");
+        return;
+      }
+
+      if (conversation._id === groupId) setTyping("");
+    };
+
+    const seenHandler = ({messageId,userId})=>{
+ setMessages(prev =>
+  prev.map(msg=>{
+    if(msg._id !== messageId)
+      return msg;
+
+    if(msg.seenBy?.includes(userId))
+      return msg;
+
+    return {
+      ...msg,
+      seenBy:[
+       ...(msg.seenBy || []),
+       userId
+      ]
+    };
+  })
+ );
+};
+
+   const deliveredHandler = ({messageId,userId})=>{
+ setMessages(prev =>
+  prev.map(msg=>{
+    if(msg._id !== messageId)
+      return msg;
+
+    if(msg.deliveredTo?.includes(userId))
+      return msg;
+
+    return {
+      ...msg,
+      deliveredTo:[
+       ...(msg.deliveredTo || []),
+       userId
+      ]
+    };
+  })
+ );
+};
+
+    const memberAddedHandler = ({ group }) => {
+      setConversations((prev) => {
+        const exists = prev.some((c) => c._id === group._id);
 
         if (exists) {
-            return prev.map(c =>
-                c._id === group._id ? group : c
-            );
+          return prev.map((c) => (c._id === group._id ? group : c));
         }
 
         return [group, ...prev];
-    });
+      });
 
-    if (conversation?._id === group._id) {
+      if (conversation?._id === group._id) {
         setConversation(group);
-    }
-};
+      }
+    };
 
     const memberRemovedHandler = ({ group }) => {
       updateGroupConversation(group);
@@ -349,7 +319,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
     socket.on("stopTyping", stopTypingHandler);
     socket.on("messagesSeen", seenHandler);
     socket.on("messageDelivered", deliveredHandler);
-    socket.on("newGroupMessage", newGroupMessageHandler);
+
     socket.on("groupUpdated", groupUpdatedHandler);
     socket.on("addMember", memberAddedHandler);
     socket.on("memberRemoved", memberRemovedHandler);
@@ -362,7 +332,6 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       socket.off("groupUpdated", groupUpdatedHandler);
       socket.off("addMember", memberAddedHandler);
       socket.off("memberRemoved", memberRemovedHandler);
-      socket.off("newGroupMessage", newGroupMessageHandler);
     };
   }, [conversation, currentUser, selectedUser, setConversations]);
   useEffect(() => {
@@ -442,7 +411,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
                   : selectedUser.status}
               </span>
 
-              {typing && !conversation?.isGroup && (
+              {typing && (
                 <>
                   <span>|</span>
                   <span className="text-success">{typing}</span>
@@ -476,6 +445,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
         onImageSend={handleImageSend}
         currentUser={currentUser}
         selectedUser={selectedUser}
+        conversation={conversation}
       />
       {showGroupInfo && (
         <GroupInfoModal

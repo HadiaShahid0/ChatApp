@@ -25,20 +25,24 @@ const messageSchema = new mongoose.Schema(
       default: "",
     },
 
-    seen: {
-      type: Boolean,
-      default: false,
-    },
-
     seenAt: {
       type: Date,
       default: null,
     },
-    
-    delivered: {
-      type: Boolean,
-      default: false,
-    },
+
+    deliveredTo: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    seenBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   {
     timestamps: true,

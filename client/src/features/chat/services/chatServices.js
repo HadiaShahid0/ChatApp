@@ -22,6 +22,7 @@ export const getOrCreateConversation = async (receiverId) => {
 
   return await response.json();
 };
+
 export const getConversations = async () => {
   const response = await fetch(`${BASE_URL}/conversations`, {
     credentials: "include",
@@ -29,15 +30,25 @@ export const getConversations = async () => {
 
   return await response.json();
 };
+
+// ---------- Shared for Private & Group ----------
+
 export const getMessages = async (conversationId) => {
-  const response = await fetch(`${BASE_URL}/messages/${conversationId}`, {
-    credentials: "include",
-  });
+  const response = await fetch(
+    `${BASE_URL}/messages/${conversationId}`,
+    {
+      credentials: "include",
+    },
+  );
 
   return await response.json();
 };
 
-export const sendMessage = async (receiverId, text) => {
+export const sendMessage = async ({
+  receiverId = null,
+  groupId = null,
+  text = "",
+}) => {
   const response = await fetch(`${BASE_URL}/messages`, {
     method: "POST",
     credentials: "include",
@@ -46,25 +57,29 @@ export const sendMessage = async (receiverId, text) => {
     },
     body: JSON.stringify({
       receiverId,
+      groupId,
       text,
     }),
   });
 
   return await response.json();
 };
-export const markSeen = async (conversationId) => {
-  const response = await fetch(`${BASE_URL}/messages/seen/${conversationId}`, {
-    method: "PUT",
-    credentials: "include",
-  });
 
-  return await response.json();
-};
-
-export const sendImage = async (receiverId, image) => {
+export const sendImage = async ({
+  receiverId = null,
+  groupId = null,
+  image,
+}) => {
   const formData = new FormData();
 
-  formData.append("receiverId", receiverId);
+  if (receiverId) {
+    formData.append("receiverId", receiverId);
+  }
+
+  if (groupId) {
+    formData.append("groupId", groupId);
+  }
+
   formData.append("image", image);
 
   const response = await fetch(`${BASE_URL}/messages`, {
@@ -72,6 +87,18 @@ export const sendImage = async (receiverId, image) => {
     credentials: "include",
     body: formData,
   });
+
+  return await response.json();
+};
+
+export const markSeen = async (conversationId) => {
+  const response = await fetch(
+    `${BASE_URL}/messages/seen/${conversationId}`,
+    {
+      method: "PUT",
+      credentials: "include",
+    },
+  );
 
   return await response.json();
 };

@@ -12,7 +12,7 @@ const router = express.Router();
 const groupUpload = createMulter("groupAvatars");
 router.post("/create", protect, groupUpload.single("groupImage"), createGroup);
 
-router.get("/:groupId", protect, getGroups);
+router.get("/", protect, getGroups);
 
 router.put("/:groupId/add-member", protect, addMember);
 

@@ -47,7 +47,9 @@ export const getMyConversationsService = async (userId) => {
         sender: {
           $ne: userId,
         },
-        seen: false,
+        seenBy: {
+          $ne: userId,
+        },
       });
 
       return {
