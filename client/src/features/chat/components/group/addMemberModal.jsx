@@ -7,7 +7,7 @@ const AddMemberModal = ({ group, close, onAdded }) => {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [loadingId, setLoadingId] = useState(null);
-
+  const [groupData, setGroupData] = useState(group);
   const loadUsers = async () => {
     const res = await getUsers();
 
@@ -19,6 +19,7 @@ const AddMemberModal = ({ group, close, onAdded }) => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadUsers();
   }, []);
+
   const availableUsers = users.filter(
     (user) => !group.participants.some((member) => member._id === user._id),
   );
@@ -26,24 +27,35 @@ const AddMemberModal = ({ group, close, onAdded }) => {
   const filtered = availableUsers.filter((user) =>
     user.name.toLowerCase().includes(search.toLowerCase()),
   );
+  useEffect(() => {
+    const handleMemberAdded = ({ group }) => {
+      if (group._id === groupData._id) {
+        setGroupData(group);
+      }
+    };
 
+    socket.on("addMember", handleMemberAdded);
+
+    return () => {
+      socket.off("addMember", handleMemberAdded);
+    };
+  }, [groupData._id]);
   const handleAdd = async (memberId) => {
     try {
       setLoadingId(memberId);
 
-      const res = await addMember(group._id, memberId);
+      const res = await addMember(groupData._id, memberId);
 
       if (!res.success) {
         setLoadingId(null);
         return;
       }
-
+      setGroupData(res.group);
       socket.emit("addMember", {
         groupId: group._id,
         memberId,
+        group: res.group,
       });
-
-      // Update GroupInfoModal and close this modal
       onAdded(res.group);
     } catch (err) {
       console.log(err);

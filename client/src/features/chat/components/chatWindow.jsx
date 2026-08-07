@@ -52,6 +52,57 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       console.log(error.message);
     }
   };
+  const updateConversation = (message) => {
+    setConversations((prev) => {
+      const updated = prev.map((conv) =>
+        conv._id === message.conversation._id
+          ? {
+              ...conv,
+              lastMessage: message,
+              unreadCount:
+                message.sender._id === currentUser._id
+                  ? conv.unreadCount || 0
+                  : conversation?._id === conv._id
+                    ? 0
+                    : (conv.unreadCount || 0) + 1,
+            }
+          : conv,
+      );
+
+      updated.sort(
+        (a, b) =>
+          new Date(b.lastMessage?.createdAt || b.updatedAt) -
+          new Date(a.lastMessage?.createdAt || a.updatedAt),
+      );
+
+      return updated;
+    });
+  };
+  const updateGroupConversation = (updatedConversation) => {
+    setConversations((prev) => {
+      const updated = prev.map((conv) =>
+        conv._id === updatedConversation._id
+          ? {
+              ...conv,
+              ...updatedConversation,
+            }
+          : conv,
+      );
+
+      // Move updated group to top
+      updated.sort((a, b) => {
+        if (a._id === updatedConversation._id) return -1;
+        if (b._id === updatedConversation._id) return 1;
+
+        return (
+          new Date(b.lastMessage?.createdAt || b.updatedAt) -
+          new Date(a.lastMessage?.createdAt || a.updatedAt)
+        );
+      });
+
+      return updated;
+    });
+  };
 
   const handleSend = async (text) => {
     try {
@@ -67,16 +118,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
       setMessages((prev) => [...prev, response.data]);
 
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv._id === response.data.conversation._id
-            ? {
-                ...conv,
-                lastMessage: response.data,
-              }
-            : conv,
-        ),
-      );
+      updateConversation(response.data);
 
       // Notify other group members
       if (conversation.isGroup) {
@@ -99,16 +141,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       setMessages((prev) => [...prev, response.data]);
 
       // Update sidebar
-      setConversations((prev) =>
-        prev.map((conv) =>
-          conv._id === response.data.conversation._id
-            ? {
-                ...conv,
-                lastMessage: response.data,
-              }
-            : conv,
-        ),
-      );
+      updateConversation(response.data);
     } catch (err) {
       console.log(err);
     }
@@ -142,68 +175,68 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
     seenMessages();
   }, [conversation]);
-
+  useEffect(() => {
+    return () => {
+      setTyping("");
+    };
+  }, [selectedUser?._id]);
   useEffect(() => {
     const groupUpdatedHandler = async ({ groupId }) => {
-      if (conversation?._id !== groupId) return;
-
       const res = await getGroups();
-
       if (!res.success) return;
 
       const updatedGroup = res.groups.find((g) => g._id === groupId);
-
       if (!updatedGroup) return;
 
-      setConversation(updatedGroup);
+      updateGroupConversation(updatedGroup); // always update sidebar
+
+      if (conversation?._id === groupId) {
+        setConversation(updatedGroup); // only update open window if relevant
+      }
     };
 
     // Socket event listeners for events like receiving messages, typing indicators, and message delivery confirmations
     const receiveMessage = async (message) => {
-      setConversations((prev) => {
-        const updated = prev.map((conv) => {
-          if (conv._id !== message.conversation._id) return conv;
+      updateConversation(message);
 
-          const opened = conv._id === conversation?._id;
-
-          return {
-            ...conv,
-            lastMessage: message,
-            unreadCount:
-              message.sender._id === currentUser._id
-                ? 0
-                : opened
-                  ? 0
-                  : (conv.unreadCount || 0) + 1,
-          };
-        });
-        return updated;
-      });
-
-      if (conversation?._id !== message.conversation._id) return;
-
-      setMessages((prev) => {
-        if (prev.some((m) => m._id === message._id)) return prev;
-
-        return [...prev, message];
-      });
-
+      // Tell sender the message reached this client
       if (message.sender._id !== currentUser._id) {
-        await markSeen(message.conversation._id);
-        console.log("Receiver got:", message._id);
         socket.emit("messageDelivered", {
           messageId: message._id,
           senderId: message.sender._id,
         });
       }
+
+      // Don't show it in current chat if another conversation is open
+      if (conversation?._id !== message.conversation._id) {
+        return;
+      }
+
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === message._id)) {
+          return prev;
+        }
+
+        return [...prev, message];
+      });
+
+      // Current conversation is open, therefore message is seen
+      if (message.sender._id !== currentUser._id) {
+        await markSeen(message.conversation._id);
+
+        socket.emit("messagesSeen", {
+          senderId: message.sender._id,
+          conversationId: message.conversation._id,
+        });
+      }
     };
 
     const typingHandler = ({ senderId }) => {
-      if (conversation?.isGroup) return;
+      if (!conversation || conversation.isGroup) return;
 
-      if (selectedUser?._id === senderId) {
-        setTyping("typing...");
-      }
+      if (selectedUser?._id !== senderId) return;
+
+      setTyping("typing...");
     };
 
     const stopTypingHandler = ({ senderId }) => {
@@ -238,7 +271,34 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
         return updated;
       });
     };
-    const newGroupMessageHandler = (message) => {
+    const newGroupMessageHandler = async (message) => {
+      // Update sidebar
+      setConversations((prev) => {
+        const updated = prev.map((conv) =>
+          conv._id === message.conversation._id
+            ? {
+                ...conv,
+                lastMessage: message,
+                unreadCount:
+                  message.sender._id === currentUser._id
+                    ? conv.unreadCount || 0
+                    : conversation?._id === conv._id
+                      ? 0
+                      : (conv.unreadCount || 0) + 1,
+              }
+            : conv,
+        );
+
+        updated.sort(
+          (a, b) =>
+            new Date(b.lastMessage?.createdAt || b.updatedAt) -
+            new Date(a.lastMessage?.createdAt || a.updatedAt),
+        );
+
+        return updated;
+      });
+
+      // If another group is open, don't append the message
       if (conversation?._id !== message.conversation._id) return;
 
       setMessages((prev) => {
@@ -246,24 +306,42 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
         return [...prev, message];
       });
+
+      // Mark as seen if this group is open
+      if (message.sender._id !== currentUser._id) {
+        await markSeen(message.conversation._id);
+
+        socket.emit("messageDelivered", {
+          messageId: message._id,
+          senderId: message.sender._id,
+        });
+      }
     };
     const memberAddedHandler = ({ group }) => {
-      if (conversation?._id !== group._id) return;
+    setConversations(prev => {
 
-      setConversation(group);
+        const exists = prev.some(c => c._id === group._id);
 
-      setConversations((prev) =>
-        prev.map((c) => (c._id === group._id ? group : c)),
-      );
-    };
+        if (exists) {
+            return prev.map(c =>
+                c._id === group._id ? group : c
+            );
+        }
+
+        return [group, ...prev];
+    });
+
+    if (conversation?._id === group._id) {
+        setConversation(group);
+    }
+};
+
     const memberRemovedHandler = ({ group }) => {
-      if (conversation?._id !== group._id) return;
+      updateGroupConversation(group);
 
-      setConversation(group);
-
-      setConversations((prev) =>
-        prev.map((c) => (c._id === group._id ? group : c)),
-      );
+      if (conversation?._id === group._id) {
+        setConversation(group);
+      }
     };
 
     socket.on("receiveMessage", receiveMessage);

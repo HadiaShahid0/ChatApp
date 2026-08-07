@@ -121,7 +121,7 @@ const socketHelper = (server) => {
         }
       }
 
-      io.to(groupId).emit("memberAdded", {
+      io.to(groupId).emit("addMember", {
         group,
       });
     });
@@ -147,7 +147,7 @@ const socketHelper = (server) => {
       }
 
       // Tell everyone still in the group
-      io.to(groupId).emit("memberRemoved", {
+      io.to(groupId).emit("removeMember", {
         group,
       });
     });

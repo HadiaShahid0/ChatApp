@@ -45,13 +45,22 @@ const AppLayout = () => {
     const onDisconnect = () => {
       console.log("Socket Disconnected");
     };
+    const profileUpdatedHandler = ({ user: updatedUser }) => {
+      if (updatedUser._id !== user._id) return;
+
+      setUser((prev) => ({
+        ...prev,
+        ...updatedUser,
+      }));
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-
+    socket.on("profileUpdated", profileUpdatedHandler);
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("profileUpdated", profileUpdatedHandler);
     };
   }, [user]);
 

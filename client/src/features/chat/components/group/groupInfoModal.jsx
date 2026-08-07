@@ -8,24 +8,16 @@ const GroupInfoModal = ({ group, currentUser, close, refresh }) => {
   const [showAddMember, setShowAddMember] = useState(false);
   const isAdmin = currentUser._id === group.admin._id;
   useEffect(() => {
-    const handleMemberAdded = ({ group }) => {
-      if (group._id === groupData._id) {
-        setGroupData(group);
-      }
-    };
-
     const handleMemberRemoved = ({ group }) => {
       if (group._id === groupData._id) {
         setGroupData(group);
       }
     };
 
-    socket.on("memberAdded", handleMemberAdded);
-    socket.on("memberRemoved", handleMemberRemoved);
+    socket.on("removeMember", handleMemberRemoved);
 
     return () => {
-      socket.off("memberAdded", handleMemberAdded);
-      socket.off("memberRemoved", handleMemberRemoved);
+      socket.off("removeMember", handleMemberRemoved);
     };
   }, [groupData._id]);
   const handleRemove = async (memberId) => {

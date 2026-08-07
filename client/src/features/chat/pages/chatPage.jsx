@@ -10,7 +10,7 @@ import ChatWindow from "../components/chatWindow";
 import GroupModal from "../components/group/groupModal";
 
 const Chat = () => {
-  const { currentUser } = useOutletContext();
+  const { currentUser, setCurrentUser } = useOutletContext();
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [conversations, setConversations] = useState([]);
@@ -33,6 +33,11 @@ const Chat = () => {
         allChats.push(...groups.groups);
       }
 
+      // Remove duplicate conversations/groups
+      allChats = [
+        ...new Map(allChats.map((chat) => [chat._id, chat])).values(),
+      ];
+
       allChats.sort(
         (a, b) =>
           new Date(b.lastMessage?.createdAt || b.updatedAt) -
@@ -50,18 +55,89 @@ const Chat = () => {
     loadChats();
   }, []);
   useEffect(() => {
-    const handleAddedToGroup = ({ group }) => {
-      setConversations((prev) => {
-        const exists = prev.some((c) => c._id === group._id);
+    const profileUpdatedHandler = ({ user }) => {
+      // Update logged-in user
+      if (currentUser?._id === user._id) {
+        setCurrentUser((prev) => ({
+          ...prev,
+          name: user.name,
+          profileImage: user.profileImage,
+        }));
+      }
 
-        if (exists) {
-          return prev.map((c) => (c._id === group._id ? group : c));
-        }
+      // Update conversations
+      setConversations((prev) =>
+        prev.map((conversation) => {
+          // Group
+          if (conversation.isGroup) {
+            return {
+              ...conversation,
+              participants: conversation.participants.map((participant) =>
+                participant._id === user._id
+                  ? {
+                      ...participant,
+                      name: user.name,
+                      profileImage: user.profileImage,
+                    }
+                  : participant,
+              ),
+              admin:
+                conversation.admin?._id === user._id
+                  ? {
+                      ...conversation.admin,
+                      name: user.name,
+                      profileImage: user.profileImage,
+                    }
+                  : conversation.admin,
+              lastMessage:
+                conversation.lastMessage?.sender?._id === user._id
+                  ? {
+                      ...conversation.lastMessage,
+                      sender: {
+                        ...conversation.lastMessage.sender,
+                        name: user.name,
+                        profileImage: user.profileImage,
+                      },
+                    }
+                  : conversation.lastMessage,
+            };
+          }
 
-        return [group, ...prev];
-      });
+          // One-to-one
+          return {
+            ...conversation,
+            participants: conversation.participants.map((participant) =>
+              participant._id === user._id
+                ? {
+                    ...participant,
+                    name: user.name,
+                    profileImage: user.profileImage,
+                  }
+                : participant,
+            ),
+            lastMessage:
+              conversation.lastMessage?.sender?._id === user._id
+                ? {
+                    ...conversation.lastMessage,
+                    sender: {
+                      ...conversation.lastMessage.sender,
+                      name: user.name,
+                      profileImage: user.profileImage,
+                    },
+                  }
+                : conversation.lastMessage,
+          };
+        }),
+      );
     };
 
+    socket.on("profileUpdated", profileUpdatedHandler);
+
+    return () => {
+      socket.off("profileUpdated", profileUpdatedHandler);
+    };
+  }, [currentUser]);
+  useEffect(() => {
     const handleRemovedFromGroup = ({ groupId }) => {
       setConversations((prev) => prev.filter((c) => c._id !== groupId));
 
@@ -72,24 +148,27 @@ const Chat = () => {
       setConversations((prev) =>
         prev.map((c) => (c._id === group._id ? group : c)),
       );
+
+      // update opened group
+      setSelectedUser((prev) => (prev?._id === group._id ? group : prev));
     };
 
     const handleMemberRemoved = ({ group }) => {
       setConversations((prev) =>
         prev.map((c) => (c._id === group._id ? group : c)),
       );
+
+      setSelectedUser((prev) => (prev?._id === group._id ? group : prev));
     };
 
-    socket.on("addedToGroup", handleAddedToGroup);
     socket.on("removedFromGroup", handleRemovedFromGroup);
-    socket.on("memberAdded", handleMemberAdded);
-    socket.on("memberRemoved", handleMemberRemoved);
+    socket.on("addMember", handleMemberAdded);
+    socket.on("removeMember", handleMemberRemoved);
 
     return () => {
-      socket.off("addedToGroup", handleAddedToGroup);
       socket.off("removedFromGroup", handleRemovedFromGroup);
-      socket.off("memberAdded", handleMemberAdded);
-      socket.off("memberRemoved", handleMemberRemoved);
+      socket.off("addMember", handleMemberAdded);
+      socket.off("removeMember", handleMemberRemoved);
     };
   }, []);
   useEffect(() => {
