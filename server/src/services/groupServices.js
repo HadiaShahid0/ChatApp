@@ -1,5 +1,5 @@
 import Conversation from "../models/conversationModel.js";
-
+import Message from "../models/messageModal.js";
 export const createGroupService = async (
   groupName,
   adminId,
@@ -30,7 +30,14 @@ export const createGroupService = async (
 
   return await Conversation.findById(group._id)
     .populate("participants", "name email profileImage status")
-    .populate("admin", "name email profileImage");
+    .populate("admin", "name email profileImage")
+    .populate({
+      path: "lastMessage",
+      populate: {
+        path: "sender",
+        select: "name profileImage",
+      },
+    });
 };
 
 export const getGroupsService = async (userId) => {
@@ -82,29 +89,100 @@ export const removeMemberService = async (groupId, memberId) => {
 };
 
 export const sendGroupMessageService = async (
-    senderId,
-    groupId,
-    text,
-    image
+  senderId,
+  groupId,
+  text,
+  image,
 ) => {
+  const conversation = await Conversation.findById(groupId);
 
-    const conversation = await Conversation.findById(groupId);
+  if (!conversation || !conversation.isGroup) {
+    throw new Error("Group not found");
+  }
 
-    if (!conversation || !conversation.isGroup) {
-        throw new Error("Group not found");
+  const message = await Message.create({
+    conversation: groupId,
+    sender: senderId,
+    text,
+    image,
+  });
+
+  conversation.lastMessage = message._id;
+  await conversation.save();
+
+  return await Message.findById(message._id)
+    .populate("sender", "-password")
+    .populate("conversation");
+};
+
+export const leaveGroupService = async (groupId, userId) => {
+  const group = await Conversation.findById(groupId);
+
+  if (!group) {
+    throw new Error("Group not found.");
+  }
+
+  if (!group.isGroup) {
+    throw new Error("This is not a group.");
+  }
+
+  const isMember = group.participants.some(
+    (id) => id.toString() === userId.toString()
+  );
+
+  if (!isMember) {
+    throw new Error("You are not a member of this group.");
+  }
+
+  // Remove user
+  group.participants = group.participants.filter(
+    (id) => id.toString() !== userId.toString()
+  );
+
+  // If admin leaves, assign another member
+  if (group.admin.toString() === userId.toString()) {
+    if (group.participants.length > 0) {
+      const randomIndex = Math.floor(
+        Math.random() * group.participants.length
+      );
+
+      group.admin = group.participants[randomIndex];
     }
+  }
 
-    const message = await Message.create({
-        conversation: groupId,
-        sender: senderId,
-        text,
-        image,
+  await group.save();
+
+  return await Conversation.findById(group._id)
+    .populate("participants", "name email profileImage status")
+    .populate("admin", "name email profileImage")
+    .populate({
+      path: "lastMessage",
+      populate: {
+        path: "sender",
+        select: "name profileImage",
+      },
     });
+};
+export const deleteGroupService = async (groupId, userId) => {
+  const group = await Conversation.findById(groupId);
 
-    conversation.lastMessage = message._id;
-    await conversation.save();
+  if (!group) {
+    throw new Error("Group not found.");
+  }
 
-    return await Message.findById(message._id)
-        .populate("sender", "-password")
-        .populate("conversation");
+  if (!group.isGroup) {
+    throw new Error("This is not a group.");
+  }
+
+  if (group.admin.toString() !== userId.toString()) {
+    throw new Error("Only the group admin can delete the group.");
+  }
+
+  await Message.deleteMany({
+    conversation: groupId,
+  });
+
+  await Conversation.findByIdAndDelete(groupId);
+
+  return group;
 };

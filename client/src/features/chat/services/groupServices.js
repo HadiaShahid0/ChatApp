@@ -73,14 +73,16 @@ export const leaveGroup = async (groupId) => {
    DELETE GROUP
 --------------------------- */
 export const deleteGroup = async (groupId) => {
-  const res = await fetch(`${BASE_URL}/groups/${groupId}`, {
-    method: "DELETE",
-    credentials: "include",
-  });
+  const response = await fetch(
+    `${BASE_URL}/groups/${groupId}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
 
-  return await res.json();
+  return await response.json();
 };
-
 /* --------------------------
    UPDATE GROUP
 --------------------------- */

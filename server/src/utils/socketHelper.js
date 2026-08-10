@@ -96,60 +96,83 @@ const socketHelper = (server) => {
 
     // Add member to group room
     socket.on("addMember", async ({ groupId, memberId }) => {
-      const group = await Conversation.findById(groupId)
-        .populate("participants", "name profileImage status")
-        .populate("admin", "name profileImage")
-        .populate({
-          path: "lastMessage",
-          populate: {
-            path: "sender",
-            select: "name profileImage",
-          },
-        });
-
-      const memberSocketId = onlineUsers.get(memberId);
-
-      if (memberSocketId) {
-        const memberSocket = io.sockets.sockets.get(memberSocketId);
-
-        if (memberSocket) {
-          memberSocket.join(groupId);
-
-          memberSocket.emit("addedToGroup", {
-            group,
+      try {
+        const group = await Conversation.findById(groupId)
+          .populate("participants", "name profileImage status")
+          .populate("admin", "name profileImage")
+          .populate({
+            path: "lastMessage",
+            populate: {
+              path: "sender",
+              select: "name profileImage",
+            },
           });
-        }
-      }
 
-      io.to(groupId).emit("addMember", {
-        group,
-      });
+        if (!group) return;
+
+        const memberSocketId = onlineUsers.get(memberId);
+
+        if (memberSocketId) {
+          const memberSocket = io.sockets.sockets.get(memberSocketId);
+
+          if (memberSocket) {
+            memberSocket.join(groupId);
+
+            memberSocket.emit("addedToGroup", {
+              group,
+            });
+          }
+        }
+
+        // Notify existing members
+        io.to(groupId).emit("groupUpdated", {
+          group,
+        });
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     socket.on("removeMember", async ({ groupId, memberId }) => {
-      const group = await Conversation.findById(groupId)
-        .populate("participants", "name profileImage status")
-        .populate("admin", "name profileImage");
-
-      const memberSocketId = onlineUsers.get(memberId);
-
-      if (memberSocketId) {
-        const memberSocket = io.sockets.sockets.get(memberSocketId);
-
-        if (memberSocket) {
-          memberSocket.leave(groupId);
-
-          // Tell removed user
-          memberSocket.emit("removedFromGroup", {
-            groupId,
+      try {
+        // Get the UPDATED group after the member was removed
+        const group = await Conversation.findById(groupId)
+          .populate("participants", "name profileImage status")
+          .populate("admin", "name profileImage")
+          .populate({
+            path: "lastMessage",
+            populate: {
+              path: "sender",
+              select: "name profileImage",
+            },
           });
-        }
-      }
 
-      // Tell everyone still in the group
-      io.to(groupId).emit("removeMember", {
-        group,
-      });
+        if (!group) return;
+
+        // Find removed user's socket
+        const memberSocketId = onlineUsers.get(memberId);
+
+        if (memberSocketId) {
+          const memberSocket = io.sockets.sockets.get(memberSocketId);
+
+          if (memberSocket) {
+            // Remove them from Socket.IO group room
+            memberSocket.leave(groupId);
+
+            // Tell ONLY the removed user to remove this group
+            memberSocket.emit("removedFromGroup", {
+              groupId: groupId.toString(),
+            });
+          }
+        }
+
+        // Notify remaining members with updated group
+        io.to(groupId).emit("groupUpdated", {
+          group,
+        });
+      } catch (error) {
+        console.log("Remove member socket error:", error);
+      }
     });
 
     // New group message
@@ -198,13 +221,49 @@ const socketHelper = (server) => {
     // =========================
     // MESSAGE SEEN
     // =========================
-    socket.on("messagesSeen", ({ senderId, conversationId }) => {
-      const senderSocket = onlineUsers.get(senderId);
+    socket.on("messagesSeen", async ({ conversationId, userId }) => {
+      try {
+        if (!conversationId || !userId) return;
 
-      if (senderSocket) {
-        io.to(senderSocket).emit("messagesSeen", {
-          conversationId,
+        const messages = await Message.find({
+          conversation: conversationId,
+          sender: { $ne: userId },
+          seenBy: { $ne: userId },
+        }).select("_id sender");
+
+        if (!messages.length) return;
+
+        await Message.updateMany(
+          {
+            _id: { $in: messages.map((msg) => msg._id) },
+          },
+          {
+            $addToSet: {
+              seenBy: userId,
+            },
+          },
+        );
+
+        const messageIds = messages.map((msg) => msg._id.toString());
+
+        // Notify every sender whose message was seen
+        const senderIds = [
+          ...new Set(messages.map((msg) => msg.sender.toString())),
+        ];
+
+        senderIds.forEach((senderId) => {
+          const senderSocket = onlineUsers.get(senderId);
+
+          if (senderSocket) {
+            io.to(senderSocket).emit("messagesSeen", {
+              conversationId: conversationId.toString(),
+              userId: userId.toString(),
+              messageIds,
+            });
+          }
         });
+      } catch (error) {
+        console.error("Seen error:", error);
       }
     });
 
@@ -213,31 +272,29 @@ const socketHelper = (server) => {
     // =========================
     socket.on("messageDelivered", async ({ messageId, userId }) => {
       try {
-        const message =
-          await Message.findById(messageId).populate("conversation");
+        const message = await Message.findById(messageId);
 
         if (!message) return;
 
-        // Don't add duplicate ids
-        if (
-  !message.deliveredTo.some(
-    (id) => id.toString() === userId.toString()
-  )
-) {
-  message.deliveredTo.push(userId);
-  await message.save();
-}
+        const alreadyDelivered = message.deliveredTo.some(
+          (id) => String(id) === String(userId),
+        );
+
+        if (!alreadyDelivered) {
+          message.deliveredTo.push(userId);
+          await message.save();
+        }
 
         const senderSocket = onlineUsers.get(message.sender.toString());
 
         if (senderSocket) {
           io.to(senderSocket).emit("messageDelivered", {
-            messageId,
-            deliveredTo: message.deliveredTo,
+            messageId: message._id.toString(),
+            userId: userId.toString(),
           });
         }
       } catch (err) {
-        console.log(err);
+        console.error("Delivery error:", err);
       }
     });
   });

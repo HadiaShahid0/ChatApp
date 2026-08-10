@@ -1,23 +1,36 @@
 import { useState } from "react";
 import { BsCheck, BsCheckAll } from "react-icons/bs";
 
-const MessageBubble = ({ message, currentUser, isGroup }) => {
+const MessageBubble = ({ message, currentUser, isGroup, conversation }) => {
   const [showImage, setShowImage] = useState(false);
 
   const isMine = message.sender?._id === currentUser._id;
+
+  const otherMembers =
+    conversation?.participants?.filter(
+      (member) => String(member._id) !== String(currentUser._id),
+    ) || [];
   const deliveredCount = message.deliveredTo?.length || 0;
-const seenCount = message.seenBy?.length || 0;
+  const seenCount = message.seenBy?.length || 0;
 
+  const fullyDelivered = isGroup
+    ? otherMembers.length > 0 &&
+      otherMembers.every((member) =>
+        message.deliveredTo?.some(
+          (id) => String(id?._id || id) === String(member._id),
+        ),
+      )
+    : deliveredCount > 1;
 
-const totalMembers = message.totalMembers || 1;
+  const fullySeen = isGroup
+    ? otherMembers.length > 0 &&
+      otherMembers.every((member) =>
+        message.seenBy?.some(
+          (id) => String(id?._id || id) === String(member._id),
+        ),
+      )
+    : seenCount > 1;
 
-
-const fullyDelivered =
- deliveredCount - 1 >= totalMembers;
-
-
-const fullySeen =
- seenCount - 1 >= totalMembers;
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",

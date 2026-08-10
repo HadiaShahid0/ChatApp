@@ -42,6 +42,7 @@ export const sendMessage = async (req, res) => {
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("receiveMessage", message);
       }
+      
     }
 
     res.status(201).json({
@@ -60,11 +61,18 @@ export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
 
-    const messages = await getMessagesService(conversationId);
+    const { limit = 20, before = null } = req.query;
+
+    const result = await getMessagesService(
+      conversationId,
+      Number(limit),
+      before,
+    );
 
     res.status(200).json({
       success: true,
-      messages,
+      messages: result.messages,
+      hasMore: result.hasMore,
     });
   } catch (error) {
     res.status(500).json({
@@ -73,24 +81,24 @@ export const getMessages = async (req, res) => {
     });
   }
 };
-
 export const markMessagesSeen = async (req, res) => {
   try {
-    const messages = await markMessagesSeenService(
-      req.params.conversationId,
-      req.user._id,
-    );
+    const conversationId = req.params.conversationId;
+    const userId = req.user._id;
+
+    const messages = await markMessagesSeenService(conversationId, userId);
 
     const io = req.app.get("io");
 
-    // Notify every sender whose message was just seen
+    const seenMessageIds = messages
+      .filter((msg) => String(msg.sender) !== String(userId))
+      .map((msg) => msg._id.toString());
+
     const senderIds = [
       ...new Set(
         messages
-          .filter(
-            (msg) => msg.sender.toString() !== req.user._id.toString(),
-          )
-          .map((msg) => msg.sender.toString()),
+          .filter((msg) => String(msg.sender) !== String(userId))
+          .map((msg) => String(msg.sender)),
       ),
     ];
 
@@ -99,8 +107,9 @@ export const markMessagesSeen = async (req, res) => {
 
       if (senderSocketId) {
         io.to(senderSocketId).emit("messagesSeen", {
-          conversationId: req.params.conversationId,
-          seenBy: req.user._id,
+          conversationId: String(conversationId),
+          userId: String(userId),
+          messageIds: seenMessageIds,
         });
       }
     });
@@ -110,7 +119,7 @@ export const markMessagesSeen = async (req, res) => {
       messages,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Mark seen error:", error);
 
     res.status(400).json({
       success: false,

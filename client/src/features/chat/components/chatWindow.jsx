@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getMessages,
   getOrCreateConversation,
   sendMessage,
   sendImage,
@@ -9,26 +8,24 @@ import {
 
 import MessageBubble from "./messageBubble";
 import MessageInput from "./messageInput";
-import socket from "../../../services/socket";
 import GroupInfoModal from "./group/groupInfoModal";
+import useChatSocket from "../hooks/useChatSocket";
+import useMessages from "../hooks/useMessage";
+
 const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
   const [conversation, setConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState("");
   const [showGroupInfo, setShowGroupInfo] = useState(false);
   const bottomRef = useRef(null);
-
-  const loadMessages = async (conversationId) => {
-    try {
-      const response = await getMessages(conversationId);
-
-      if (response.success) {
-        setMessages(response.messages || []);
-      }
-    } catch (error) {
-      console.log(error.message);
-    }
-  };
+  const {
+    messages,
+    setMessages,
+    loadingOlder,
+    messagesContainerRef,
+    skipNextAutoScrollRef,
+    loadMessages,
+    loadOlderMessages,
+  } = useMessages(conversation);
 
   const loadConversation = async () => {
     if (!selectedUser) return;
@@ -52,6 +49,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       console.log(error.message);
     }
   };
+
   const updateConversation = (message) => {
     setConversations((prev) => {
       const updated = prev.map((conv) =>
@@ -78,32 +76,37 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       return updated;
     });
   };
-  const updateGroupConversation = (updatedConversation) => {
+
+  const updateGroupConversation = (updatedGroup) => {
     setConversations((prev) => {
+      const exists = prev.some((conv) => conv._id === updatedGroup._id);
+
+      if (!exists) {
+        return [updatedGroup, ...prev];
+      }
+
       const updated = prev.map((conv) =>
-        conv._id === updatedConversation._id
+        conv._id === updatedGroup._id
           ? {
               ...conv,
-              ...updatedConversation,
+              ...updatedGroup,
             }
           : conv,
       );
 
-      // Move updated group to top
-      updated.sort((a, b) => {
-        if (a._id === updatedConversation._id) return -1;
-        if (b._id === updatedConversation._id) return 1;
-
-        return (
+      updated.sort(
+        (a, b) =>
           new Date(b.lastMessage?.createdAt || b.updatedAt) -
-          new Date(a.lastMessage?.createdAt || a.updatedAt)
-        );
-      });
+          new Date(a.lastMessage?.createdAt || a.updatedAt),
+      );
 
       return updated;
     });
   };
-
+  const addSentMessage = (message) => {
+    setMessages((prev) => [...prev, message]);
+    updateConversation(message);
+  };
   const handleSend = async (text) => {
     try {
       const response = await sendMessage({
@@ -114,12 +117,8 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
       if (!response.success) return;
 
-      setMessages((prev) => [...prev, response.data]);
+      addSentMessage(response.data);
 
-      updateConversation(response.data);
-
-      // // Notify other group members
-      // if (conversation.isGroup) {
       //   socket.emit("newGroupMessage", {
       //     groupId: conversation._id,
       //     message: response.data,
@@ -129,6 +128,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       console.log(err);
     }
   };
+
   const handleImageSend = async (file) => {
     try {
       const response = await sendImage({
@@ -139,14 +139,12 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       if (!response.success) return;
 
       // Show image immediately
-      setMessages((prev) => [...prev, response.data]);
-
-      // Update sidebar
-      updateConversation(response.data);
+      addSentMessage(response.data);
     } catch (err) {
       console.log(err);
     }
   };
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadConversation();
@@ -176,172 +174,31 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
     seenMessages();
   }, [conversation]);
+
   useEffect(() => {
     return () => {
       setTyping("");
     };
   }, [selectedUser?._id]);
+
+  useChatSocket({
+    conversation,
+    currentUser,
+    selectedUser,
+    setMessages,
+    setTyping,
+    setConversation,
+    setConversations,
+    updateConversation,
+    updateGroupConversation,
+  });
+
   useEffect(() => {
-    const groupUpdatedHandler = ({ group }) => {
-      updateGroupConversation(group);
-
-      if (conversation?._id === group._id) {
-        setConversation(group);
-      }
-    };
-    // Socket event listeners for events like receiving messages, typing indicators, and message delivery confirmations
-    const receiveMessage = async (message) => {
-      updateConversation(message);
-      if (message.sender._id === currentUser._id) {
-        return;
-      }
-      if (message.sender._id !== currentUser._id) {
-        socket.emit("messageDelivered", {
-          messageId: message._id,
-          userId: currentUser._id,
-        });
-      }
-
-      if (conversation?._id !== message.conversation._id) return;
-
-      setMessages((prev) => {
-        if (prev.some((m) => m._id === message._id)) return prev;
-        return [...prev, message];
-      });
-
-     if (
-    conversation?._id === message.conversation._id &&
-    document.visibilityState === "visible"
-) {
-    await markSeen(message.conversation._id);
-
-    socket.emit("messagesSeen", {
-        conversationId: message.conversation._id,
-        userId: currentUser._id,
-    });
-}
-    };
-
-    const typingHandler = ({ senderId, groupId, sender }) => {
-      if (!conversation) return;
-
-      // Private chat
-      if (!conversation.isGroup) {
-        if (selectedUser?._id !== senderId) return;
-        setTyping("typing...");
-        return;
-      }
-
-      // Group chat
-      if (conversation._id !== groupId) return;
-
-      if (senderId === currentUser._id) return;
-
-      setTyping(`${sender} is typing...`);
-    };
-    const stopTypingHandler = ({ senderId, groupId }) => {
-      if (!conversation) return;
-
-      if (!conversation.isGroup) {
-        if (selectedUser?._id === senderId) setTyping("");
-        return;
-      }
-
-      if (conversation._id === groupId) setTyping("");
-    };
-
-    const seenHandler = ({messageId,userId})=>{
- setMessages(prev =>
-  prev.map(msg=>{
-    if(msg._id !== messageId)
-      return msg;
-
-    if(msg.seenBy?.includes(userId))
-      return msg;
-
-    return {
-      ...msg,
-      seenBy:[
-       ...(msg.seenBy || []),
-       userId
-      ]
-    };
-  })
- );
-};
-
-   const deliveredHandler = ({messageId,userId})=>{
- setMessages(prev =>
-  prev.map(msg=>{
-    if(msg._id !== messageId)
-      return msg;
-
-    if(msg.deliveredTo?.includes(userId))
-      return msg;
-
-    return {
-      ...msg,
-      deliveredTo:[
-       ...(msg.deliveredTo || []),
-       userId
-      ]
-    };
-  })
- );
-};
-
-    const memberAddedHandler = ({ group }) => {
-      setConversations((prev) => {
-        const exists = prev.some((c) => c._id === group._id);
-
-        if (exists) {
-          return prev.map((c) => (c._id === group._id ? group : c));
-        }
-
-        return [group, ...prev];
-      });
-
-      if (conversation?._id === group._id) {
-        setConversation(group);
-      }
-    };
-
-    const memberRemovedHandler = ({ group }) => {
-      updateGroupConversation(group);
-
-      if (conversation?._id === group._id) {
-        setConversation(group);
-      }
-    };
-
-    socket.on("receiveMessage", receiveMessage);
-    socket.on("typing", typingHandler);
-    socket.on("stopTyping", stopTypingHandler);
-    socket.on("messagesSeen", seenHandler);
-    socket.on("messageDelivered", deliveredHandler);
-
-    socket.on("groupUpdated", groupUpdatedHandler);
-    socket.on("addMember", memberAddedHandler);
-    socket.on("memberRemoved", memberRemovedHandler);
-    return () => {
-      socket.off("receiveMessage", receiveMessage);
-      socket.off("typing", typingHandler);
-      socket.off("stopTyping", stopTypingHandler);
-      socket.off("messagesSeen", seenHandler);
-      socket.off("messageDelivered", deliveredHandler);
-      socket.off("groupUpdated", groupUpdatedHandler);
-      socket.off("addMember", memberAddedHandler);
-      socket.off("memberRemoved", memberRemovedHandler);
-    };
-  }, [conversation, currentUser, selectedUser, setConversations]);
-  useEffect(() => {
-    if (conversation?.isGroup) {
-      socket.emit("joinGroup", {
-        groupId: conversation._id,
-      });
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
     }
-  }, [conversation]);
-  useEffect(() => {
+
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
     });
@@ -421,19 +278,33 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
           </div>
         </div>
       </div>
+
       <div
+        ref={messagesContainerRef}
         className="flex-grow-1 p-3"
         style={{
           overflowY: "auto",
           background: "#f5f5f5",
         }}
+        onScroll={(e) => {
+          if (e.currentTarget.scrollTop <= 50) {
+            loadOlderMessages();
+          }
+        }}
       >
+        {loadingOlder && (
+          <div className="text-center py-2 text-secondary small">
+            Loading older messages...
+          </div>
+        )}
+
         {messages.map((msg) => (
           <MessageBubble
             key={msg._id}
             message={msg}
             currentUser={currentUser}
             isGroup={conversation?.isGroup}
+            group={conversation}
           />
         ))}
 
@@ -447,15 +318,44 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
         selectedUser={selectedUser}
         conversation={conversation}
       />
-      {showGroupInfo && (
+
+      {showGroupInfo && conversation && (
         <GroupInfoModal
           group={conversation}
           currentUser={currentUser}
-          close={() => setShowGroupInfo(false)}
-          refresh={() => {
+          closegroup={() => setShowGroupInfo(false)}
+          onLeave={(groupId) => {
             setShowGroupInfo(false);
+
+            // Clear selected conversation
+            setConversation(null);
+
+            // Clear messages
+            setMessages([]);
+
+            // Remove group from sidebar
+            setConversations((prev) =>
+              prev.filter((conv) => conv._id !== groupId),
+            );
           }}
         />
+        // <GroupInfoModal
+        //   group={conversation}
+        //   currentUser={currentUser}
+        //   close={() => setShowGroupInfo(false)}
+        //   refresh={() => {
+        //     const groupId = conversation._id;
+
+        //     setShowGroupInfo(false);
+
+        //     setConversations((prev) =>
+        //       prev.filter((conv) => conv._id !== groupId),
+        //     );
+
+        //     setConversation(null);
+        //     setMessages([]);
+        //   }}
+        // />
       )}
     </div>
   );

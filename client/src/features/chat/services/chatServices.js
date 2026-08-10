@@ -33,13 +33,20 @@ export const getConversations = async () => {
 
 // ---------- Shared for Private & Group ----------
 
-export const getMessages = async (conversationId) => {
-  const response = await fetch(
-    `${BASE_URL}/messages/${conversationId}`,
-    {
-      credentials: "include",
-    },
-  );
+export const getMessages = async (
+  conversationId,
+  limit = 20,
+  before = null,
+) => {
+  let url = `${BASE_URL}/messages/${conversationId}?limit=${limit}`;
+
+  if (before) {
+    url += `&before=${before}`;
+  }
+
+  const response = await fetch(url, {
+    credentials: "include",
+  });
 
   return await response.json();
 };

@@ -11,7 +11,6 @@ const UserItem = ({
   }
   const lastMessage = conversation.lastMessage;
 
-
   return (
     <div
       className={`d-flex align-items-center p-3 border-bottom ${

@@ -48,5 +48,5 @@ const messageSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
-
+messageSchema.index({ conversation: 1, _id: -1 });
 export default mongoose.model("Message", messageSchema);

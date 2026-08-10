@@ -35,40 +35,51 @@ export const sendMessageService = async (
     deliveredTo: [senderId],
     seenBy: [senderId],
   });
-const totalMembers = conversation.participants.filter(
-  (id) => id.toString() !== senderId.toString()
-).length;
+  const totalMembers = conversation.participants.filter(
+    (id) => id.toString() !== senderId.toString(),
+  ).length;
 
-
-const populatedMessage = await Message.findById(message._id)
-.populate("sender", "-password")
-.populate({
- path:"conversation",
- populate:{
-   path:"participants",
-   select:"name profileImage status"
- }
-});
+  const populatedMessage = await Message.findById(message._id)
+    .populate("sender", "-password")
+    .populate({
+      path: "conversation",
+      populate: {
+        path: "participants",
+        select: "name profileImage status",
+      },
+    });
 
   conversation.lastMessage = message._id;
   await conversation.save();
 
   return {
- ...populatedMessage.toObject(),
- totalMembers,
-};
+    ...populatedMessage.toObject(),
+    totalMembers,
+  };
 };
 
-export const getMessagesService = async (conversationId) => {
+export const getMessagesService = async (
+  conversationId,
+  limit = 20,
+  before = null,
+) => {
   const conversation = await Conversation.findById(conversationId);
 
   if (!conversation) {
     throw new Error("Conversation not found.");
   }
 
-  return await Message.find({
+  const query = {
     conversation: conversationId,
-  })
+  };
+
+  // If before is provided,
+  // get messages older than that message
+  if (before) {
+    query._id = { $lt: before };
+  }
+
+  const messages = await Message.find(query)
     .populate("sender", "-password")
     .populate({
       path: "conversation",
@@ -83,7 +94,21 @@ export const getMessagesService = async (conversationId) => {
         },
       ],
     })
-    .sort({ createdAt: 1 });
+    .sort({ _id: -1 })
+    .limit(Number(limit));
+
+  // We fetched newest → oldest,
+  // but frontend needs oldest → newest
+  messages.reverse();
+
+  // If we received less than the limit,
+  // there are no more older messages.
+  const hasMore = messages.length === Number(limit);
+
+  return {
+    messages,
+    hasMore,
+  };
 };
 
 export const markMessagesSeenService = async (conversationId, userId) => {
@@ -92,34 +117,28 @@ export const markMessagesSeenService = async (conversationId, userId) => {
     sender: { $ne: userId },
   });
 
+  const newlySeenMessages = [];
+
   for (const message of messages) {
-    // Delivered
-    if (!message.deliveredTo.includes(userId)) {
+    let changed = false;
+
+    if (
+      !message.deliveredTo.some((id) => id.toString() === userId.toString())
+    ) {
       message.deliveredTo.push(userId);
+      changed = true;
     }
 
-    if (!message.seenBy.includes(userId)) {
+    if (!message.seenBy.some((id) => id.toString() === userId.toString())) {
       message.seenBy.push(userId);
+      changed = true;
     }
 
-    await message.save();
+    if (changed) {
+      await message.save();
+      newlySeenMessages.push(message);
+    }
   }
 
-  return await Message.find({
-    conversation: conversationId,
-  })
-    .populate("sender", "-password")
-    .populate({
-      path: "conversation",
-      populate: [
-        {
-          path: "participants",
-          select: "name profileImage status",
-        },
-        {
-          path: "admin",
-          select: "name profileImage",
-        },
-      ],
-    });
+  return newlySeenMessages;
 };
