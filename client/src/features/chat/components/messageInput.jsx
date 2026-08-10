@@ -1,44 +1,66 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import socket from "../../../services/socket";
 import { BsImage, BsX } from "react-icons/bs";
-import { sendImage } from "../services/chatServices";
 
-const MessageInput = ({ onSend, selectedUser, currentUser }) => {
+const MessageInput = ({
+  onSend,
+  onImageSend,
+  selectedUser,
+  currentUser,
+  conversation,
+}) => {
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [preview, setPreview] = useState("");
+
   const handleChange = (e) => {
-    setText(e.target.value);
+    const value = e.target.value;
+    setText(value);
+
+    clearTimeout(window.typingTimer);
+
+    if (!value.trim()) {
+      socket.emit("stopTyping", {
+        receiverId: selectedUser._id,
+        senderId: currentUser._id,
+      });
+      return;
+    }
 
     socket.emit("typing", {
-      receiverId: selectedUser._id,
+      receiverId: conversation.isGroup ? null : selectedUser._id,
+      groupId: conversation.isGroup ? conversation._id : null,
       senderId: currentUser._id,
       sender: currentUser.name,
     });
 
-    clearTimeout(window.typingTimer);
-
     window.typingTimer = setTimeout(() => {
       socket.emit("stopTyping", {
         receiverId: selectedUser._id,
+        senderId: currentUser._id,
+        groupId: conversation.isGroup ? conversation._id : null,
       });
     }, 1000);
   };
+  useEffect(() => {
+    return () => {
+      if (!selectedUser || !currentUser) return;
 
+      socket.emit("stopTyping", {
+        receiverId: selectedUser._id,
+        senderId: currentUser._id,
+      });
+
+      clearTimeout(window.typingTimer);
+    };
+  }, [selectedUser, currentUser]);
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
       // Send image if selected
-      if (selectedImage) {
-        const response = await sendImage(selectedUser._id, selectedImage);
-
-        if (response.success) {
-          removeImage();
-        }
-
-        return;
-      }
+      await onImageSend(selectedImage);
+      removeImage();
 
       // Send text
       if (!text.trim()) return;
@@ -69,7 +91,7 @@ const MessageInput = ({ onSend, selectedUser, currentUser }) => {
   };
   const handleImageClick = (e) => {
     e.target.value = null; // Reset the input value to allow re-selecting the same file
-  }
+  };
   return (
     <>
       {preview && (

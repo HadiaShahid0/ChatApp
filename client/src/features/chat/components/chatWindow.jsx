@@ -1,79 +1,186 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  getMessages,
   getOrCreateConversation,
   sendMessage,
+  sendImage,
   markSeen,
 } from "../services/chatServices";
+
 import MessageBubble from "./messageBubble";
 import MessageInput from "./messageInput";
-import socket from "../../../services/socket";
+import GroupInfoModal from "./group/groupInfoModal";
+import useChatSocket from "../hooks/useChatSocket";
+import useMessages from "../hooks/useMessage";
 
 const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
   const [conversation, setConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState("");
-
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
   const bottomRef = useRef(null);
-
-  const loadMessages = async (conversationId) => {
-    try {
-      const response = await getMessages(conversationId);
-
-      if (response.success) {
-        setMessages(response.messages);
-      }
-    } catch (error) {
-      console.log(error.message);
-    }
-  };
+  const {
+    messages,
+    setMessages,
+    loadingOlder,
+    messagesContainerRef,
+    skipNextAutoScrollRef,
+    loadMessages,
+    loadOlderMessages,
+  } = useMessages(conversation);
 
   const loadConversation = async () => {
     if (!selectedUser) return;
 
     try {
+      // Group selected
+      if (selectedUser.isGroup) {
+        setConversation(selectedUser);
+        await loadMessages(selectedUser._id);
+        return;
+      }
+
+      // Private chat
       const response = await getOrCreateConversation(selectedUser._id);
 
       if (response.success) {
         setConversation(response.conversation);
-        loadMessages(response.conversation._id);
+        await loadMessages(response.conversation._id);
       }
     } catch (error) {
       console.log(error.message);
     }
   };
 
+  const updateConversation = (message) => {
+    setConversations((prev) => {
+      const updated = prev.map((conv) =>
+        conv._id === message.conversation._id
+          ? {
+              ...conv,
+              lastMessage: message,
+              unreadCount:
+                message.sender._id === currentUser._id
+                  ? conv.unreadCount || 0
+                  : conversation?._id === conv._id
+                    ? 0
+                    : (conv.unreadCount || 0) + 1,
+            }
+          : conv,
+      );
+
+      updated.sort(
+        (a, b) =>
+          new Date(b.lastMessage?.createdAt || b.updatedAt) -
+          new Date(a.lastMessage?.createdAt || a.updatedAt),
+      );
+
+      return updated;
+    });
+  };
+
+  const updateGroupConversation = (updatedGroup) => {
+    setConversations((prev) => {
+      const exists = prev.some((conv) => conv._id === updatedGroup._id);
+
+      if (!exists) {
+        return [updatedGroup, ...prev];
+      }
+
+      const updated = prev.map((conv) =>
+        conv._id === updatedGroup._id
+          ? {
+              ...conv,
+              ...updatedGroup,
+            }
+          : conv,
+      );
+
+      updated.sort(
+        (a, b) =>
+          new Date(b.lastMessage?.createdAt || b.updatedAt) -
+          new Date(a.lastMessage?.createdAt || a.updatedAt),
+      );
+
+      return updated;
+    });
+  };
+  const addSentMessage = (message) => {
+    setMessages((prev) => {
+      const exists = prev.some(
+        (msg) => String(msg._id) === String(message._id),
+      );
+
+      if (exists) {
+        return prev.map((msg) => {
+          if (String(msg._id) !== String(message._id)) {
+            return msg;
+          }
+
+          return {
+            ...msg,
+            ...message,
+
+            // Never lose delivery updates already received.
+            deliveredTo: [
+              ...new Map(
+                [
+                  ...(msg.deliveredTo || []),
+                  ...(message.deliveredTo || []),
+                ].map((id) => [String(id?._id || id), id]),
+              ).values(),
+            ],
+
+            seenBy: [
+              ...new Map(
+                [...(msg.seenBy || []), ...(message.seenBy || [])].map((id) => [
+                  String(id?._id || id),
+                  id,
+                ]),
+              ).values(),
+            ],
+          };
+        });
+      }
+
+      return [...prev, message];
+    });
+
+    updateConversation(message);
+  };
   const handleSend = async (text) => {
     try {
-      const response = await sendMessage(selectedUser._id, text);
+      const response = await sendMessage({
+        receiverId: conversation.isGroup ? null : selectedUser._id,
+        groupId: conversation.isGroup ? conversation._id : null,
+        text,
+      });
 
       if (!response.success) return;
 
-      // Show sender message immediately
-      setMessages((prev) => [...prev, response.data]);
+      addSentMessage(response.data);
+      console.log("SEND MESSAGE RESPONSE:", response);
+      //   socket.emit("newGroupMessage", {
+      //     groupId: conversation._id,
+      //     message: response.data,
+      //   });
+      // }
+    } catch (err) {
+      console.log(err);
+    }
+  };
 
-      // Update sidebar
-      setConversations((prev) => {
-        const updated = prev.map((conv) =>
-          conv._id === response.data.conversation._id
-            ? {
-                ...conv,
-                lastMessage: response.data,
-                unreadCount: 0,
-              }
-            : conv,
-        );
-
-        updated.sort(
-          (a, b) =>
-            new Date(b.lastMessage?.createdAt || 0) -
-            new Date(a.lastMessage?.createdAt || 0),
-        );
-
-        return updated;
+  const handleImageSend = async (file) => {
+    try {
+      const response = await sendImage({
+        receiverId: conversation.isGroup ? null : selectedUser._id,
+        groupId: conversation.isGroup ? conversation._id : null,
+        image: file,
       });
-    } catch (error) {
-      console.log(error);
+      if (!response.success) return;
+
+      // Show image immediately
+      addSentMessage(response.data);
+    } catch (err) {
+      console.log(err);
     }
   };
 
@@ -108,101 +215,29 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
   }, [conversation]);
 
   useEffect(() => {
-    // Socket event listeners for events like receiving messages, typing indicators, and message delivery confirmations
-    const receiveMessage = async (message) => {
-      setConversations((prev) => {
-        const updated = prev.map((conv) => {
-          if (conv._id !== message.conversation._id) return conv;
-
-          const opened = conv._id === conversation?._id;
-
-          return {
-            ...conv,
-            lastMessage: message,
-            unreadCount:
-              message.sender._id === currentUser._id
-                ? 0
-                : opened
-                  ? 0
-                  : (conv.unreadCount || 0) + 1,
-          };
-        });
-        return updated;
-      });
-
-      if (conversation?._id !== message.conversation._id) return;
-
-      setMessages((prev) => {
-        if (prev.some((m) => m._id === message._id)) return prev;
-
-        return [...prev, message];
-      });
-
-      if (message.sender._id !== currentUser._id) {
-        await markSeen(message.conversation._id);
-        console.log("Receiver got:", message._id);
-        socket.emit("messageDelivered", {
-          messageId: message._id,
-          senderId: message.sender._id,
-        });
-      }
-    };
-
-    const typingHandler = ({ senderId }) => {
-      if (selectedUser?._id === senderId) {
-        setTyping("typing...");
-      }
-    };
-
-    const stopTypingHandler = ({ senderId }) => {
-      if (selectedUser?._id === senderId) {
-        setTyping("");
-      }
-    };
-
-    const seenHandler = ({ conversationId }) => {
-      if (conversationId !== conversation?._id) return;
-
-      setMessages((prev) =>
-        prev.map((msg) => ({
-          ...msg,
-          seen: true,
-        })),
-      );
-    };
-
-    const deliveredHandler = ({ messageId }) => {
-      console.log("Sender received delivered:", messageId);
-
-      setMessages((prev) => {
-        console.log("Current messages:", prev);
-
-        const updated = prev.map((msg) =>
-          msg._id === messageId ? { ...msg, delivered: true } : msg,
-        );
-
-        console.log("Updated messages:", updated);
-
-        return updated;
-      });
-    };
-
-    socket.on("receiveMessage", receiveMessage);
-    socket.on("typing", typingHandler);
-    socket.on("stopTyping", stopTypingHandler);
-    socket.on("messagesSeen", seenHandler);
-    socket.on("messageDelivered", deliveredHandler);
-
     return () => {
-      socket.off("receiveMessage", receiveMessage);
-      socket.off("typing", typingHandler);
-      socket.off("stopTyping", stopTypingHandler);
-      socket.off("messagesSeen", seenHandler);
-      socket.off("messageDelivered", deliveredHandler);
+      setTyping("");
     };
-  }, [conversation, currentUser, selectedUser, setConversations]);
+  }, [selectedUser?._id]);
+
+  useChatSocket({
+    conversation,
+    currentUser,
+    selectedUser,
+    setMessages,
+    setTyping,
+    setConversation,
+    setConversations,
+    updateConversation,
+    updateGroupConversation,
+  });
 
   useEffect(() => {
+    if (skipNextAutoScrollRef.current) {
+      skipNextAutoScrollRef.current = false;
+      return;
+    }
+
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
     });
@@ -218,15 +253,31 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
   return (
     <div className="d-flex flex-column h-100">
-      <div className="border-bottom p-3 bg-white">
+      <div
+        className="border-bottom p-3 bg-white"
+        style={{
+          cursor: conversation?.isGroup ? "pointer" : "default",
+        }}
+        onClick={() => {
+          if (conversation?.isGroup) {
+            setShowGroupInfo(true);
+          }
+        }}
+      >
         <div className="d-flex align-items-center">
           <img
             src={
-              selectedUser.profileImage
-                ? `http://localhost:5000/${selectedUser.profileImage}`
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                    selectedUser.name,
-                  )}`
+              conversation?.isGroup
+                ? conversation.groupImage
+                  ? `http://localhost:5000/${conversation.groupImage}`
+                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      conversation.groupName,
+                    )}`
+                : selectedUser.profileImage
+                  ? `http://localhost:5000/${selectedUser.profileImage}`
+                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      selectedUser.name,
+                    )}`
             }
             className="rounded-circle me-3"
             width="50"
@@ -235,17 +286,25 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
           />
 
           <div>
-            <h5 className="mb-0">{selectedUser.name}</h5>
+            <h5 className="mb-0">
+              {conversation?.isGroup
+                ? conversation.groupName
+                : selectedUser.name}
+            </h5>
 
             <div className="d-flex align-items-center gap-2 small">
               <span
                 className={
-                  selectedUser.status === "online"
-                    ? "text-success"
-                    : "text-secondary"
+                  conversation?.isGroup
+                    ? "text-secondary"
+                    : selectedUser.status === "online"
+                      ? "text-success"
+                      : "text-secondary"
                 }
               >
-                {selectedUser.status}
+                {conversation?.isGroup
+                  ? `${conversation.participants.length} members`
+                  : selectedUser.status}
               </span>
 
               {typing && (
@@ -260,17 +319,31 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       </div>
 
       <div
+        ref={messagesContainerRef}
         className="flex-grow-1 p-3"
         style={{
           overflowY: "auto",
           background: "#f5f5f5",
         }}
+        onScroll={(e) => {
+          if (e.currentTarget.scrollTop <= 50) {
+            loadOlderMessages();
+          }
+        }}
       >
+        {loadingOlder && (
+          <div className="text-center py-2 text-secondary small">
+            Loading older messages...
+          </div>
+        )}
+
         {messages.map((msg) => (
           <MessageBubble
             key={msg._id}
             message={msg}
             currentUser={currentUser}
+            isGroup={conversation?.isGroup}
+            conversation={conversation}
           />
         ))}
 
@@ -279,9 +352,50 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
 
       <MessageInput
         onSend={handleSend}
+        onImageSend={handleImageSend}
         currentUser={currentUser}
         selectedUser={selectedUser}
+        conversation={conversation}
       />
+
+      {showGroupInfo && conversation && (
+        <GroupInfoModal
+          group={conversation}
+          currentUser={currentUser}
+          closegroup={() => setShowGroupInfo(false)}
+          onLeave={(groupId) => {
+            setShowGroupInfo(false);
+
+            // Clear selected conversation
+            setConversation(null);
+
+            // Clear messages
+            setMessages([]);
+
+            // Remove group from sidebar
+            setConversations((prev) =>
+              prev.filter((conv) => conv._id !== groupId),
+            );
+          }}
+        />
+        // <GroupInfoModal
+        //   group={conversation}
+        //   currentUser={currentUser}
+        //   close={() => setShowGroupInfo(false)}
+        //   refresh={() => {
+        //     const groupId = conversation._id;
+
+        //     setShowGroupInfo(false);
+
+        //     setConversations((prev) =>
+        //       prev.filter((conv) => conv._id !== groupId),
+        //     );
+
+        //     setConversation(null);
+        //     setMessages([]);
+        //   }}
+        // />
+      )}
     </div>
   );
 };

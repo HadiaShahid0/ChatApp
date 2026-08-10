@@ -1,16 +1,45 @@
 import { useState } from "react";
 import { BsCheck, BsCheckAll } from "react-icons/bs";
 
-const MessageBubble = ({ message, currentUser }) => {
+const MessageBubble = ({ message, currentUser, isGroup, conversation }) => {
   const [showImage, setShowImage] = useState(false);
 
   const isMine = message.sender?._id === currentUser._id;
+
+  const otherMembers =
+    conversation?.participants?.filter(
+      (member) => String(member._id) !== String(currentUser._id),
+    ) || [];
+  const deliveredCount = message.deliveredTo?.length || 0;
+  const seenCount = message.seenBy?.length || 0;
+
+  const fullyDelivered = isGroup
+    ? otherMembers.length > 0 &&
+      otherMembers.every((member) =>
+        message.deliveredTo?.some(
+          (id) => String(id?._id || id) === String(member._id),
+        ),
+      )
+    : deliveredCount > 1;
+
+  const fullySeen = isGroup
+    ? otherMembers.length > 0 &&
+      otherMembers.every((member) =>
+        message.seenBy?.some(
+          (id) => String(id?._id || id) === String(member._id),
+        ),
+      )
+    : seenCount > 1;
 
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
-
+  console.log("MESSAGE DELIVERY STATE:", {
+    messageId: message._id,
+    deliveredTo: message.deliveredTo,
+    participants: conversation?.participants,
+  });
   return (
     <>
       <div
@@ -29,6 +58,20 @@ const MessageBubble = ({ message, currentUser }) => {
             wordBreak: "break-word",
           }}
         >
+          {/* Group sender name */}
+          {isGroup && !isMine && (
+            <div
+              className="fw-bold mb-2"
+              style={{
+                color: "#0d6efd",
+                fontSize: "13px",
+              }}
+            >
+              {message.sender?.name}
+            </div>
+          )}
+
+          {/* Image */}
           {message.image && (
             <img
               src={`http://localhost:5000/${message.image}`}
@@ -42,8 +85,10 @@ const MessageBubble = ({ message, currentUser }) => {
             />
           )}
 
+          {/* Text */}
           {message.text && <div>{message.text}</div>}
 
+          {/* Time + Status */}
           <div
             className={`d-flex justify-content-end align-items-center mt-1 ${
               isMine ? "text-light" : "text-muted"
@@ -54,9 +99,9 @@ const MessageBubble = ({ message, currentUser }) => {
 
             {isMine && (
               <span className="ms-1">
-                {message.seen ? (
+                {fullySeen ? (
                   <BsCheckAll className="text-info" />
-                ) : message.delivered ? (
+                ) : fullyDelivered ? (
                   <BsCheckAll />
                 ) : (
                   <BsCheck />
@@ -67,12 +112,12 @@ const MessageBubble = ({ message, currentUser }) => {
         </div>
       </div>
 
-      {/* Image Preview */}
+      {/* Full Screen Image Preview */}
       {showImage && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
           style={{
-            background: "rgba(0,0,0,0.9)",
+            background: "rgba(0,0,0,.92)",
             zIndex: 9999,
           }}
           onClick={() => setShowImage(false)}

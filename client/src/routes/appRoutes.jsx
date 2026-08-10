@@ -7,10 +7,13 @@ import ChatPage from "../features/chat/pages/chatPage";
 import ProtectedRoute from "./protectedRoutes";
 import Profile from "../features/profile/pages/profile";
 import AppLayout from "../components/layout/AppLayout";
+// import GroupPage from "../features/group/pages/groupPage";
 const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/" element={<Login />} />
+
       <Route path="/register" element={<Register />} />
       <Route
         element={
@@ -22,6 +25,7 @@ const AppRoutes = () => {
         <Route path="/chat" element={<ChatPage />} />
 
         <Route path="/profile" element={<Profile />} />
+        {/* <Route path="/groups" element={<GroupPage />} /> */}
       </Route>
     </Routes>
   );

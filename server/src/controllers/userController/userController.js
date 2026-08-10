@@ -4,7 +4,7 @@ import {
   uploadProfileImageService,
   getAllUsersService,
 } from "../../services/userServices.js";
-
+import { onlineUsers } from "../../utils/socketHelper.js";
 export const getCurrentUser = async (req, res) => {
   try {
     const user = await getCurrentUserService(req.user._id);
@@ -23,7 +23,19 @@ export const getCurrentUser = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const user = await updateProfileService(req.user._id, req.body.name);
+    const { name } = req.body;
+
+    const user = await updateProfileService(req.user._id, name);
+
+    const io = req.app.get("io");
+
+    io.emit("profileUpdated", {
+      user: {
+        _id: user._id,
+        name: user.name,
+        profileImage: user.profileImage,
+      },
+    });
 
     res.json({
       success: true,
@@ -43,9 +55,24 @@ export const uploadProfileImage = async (req, res) => {
     if (!req.file) {
       throw new Error("Please select an image.");
     }
-    const imagePath = `uploads/avaters/${req.file.filename}`;
 
-    const user = await uploadProfileImageService(req.user._id, imagePath);
+    const imagePath = `uploads/profileAvatars/${req.file.filename}`;
+
+    const user = await uploadProfileImageService(
+      req.user._id,
+      imagePath
+    );
+
+    const io = req.app.get("io");
+
+    // Notify all connected users
+    io.emit("profileUpdated", {
+      user: {
+        _id: user._id,
+        name: user.name,
+        profileImage: user.profileImage,
+      },
+    });
 
     res.json({
       success: true,

@@ -3,13 +3,18 @@ import {
   getMessagesService,
   markMessagesSeenService,
 } from "../../services/messageServices.js";
+import Conversation from "../../models/conversationModel.js";
 import { onlineUsers } from "../../utils/socketHelper.js";
+import Message from "../../models/messageModal.js";
 export const sendMessage = async (req, res) => {
   try {
-    const { receiverId, text } = req.body;
+    console.log("REQ BODY:", req.body);
+    console.log("REQ USER:", req.user?._id);
+    console.log("REQ FILE:", req.file);
+    const { receiverId, groupId, text } = req.body;
 
-    if (!receiverId) {
-      throw new Error("Receiver is required.");
+    if (!receiverId && !groupId) {
+      throw new Error("Receiver or Group is required.");
     }
 
     const image = req.file ? `uploads/chat/${req.file.filename}` : "";
@@ -23,15 +28,22 @@ export const sendMessage = async (req, res) => {
       receiverId,
       text || "",
       image,
+      groupId,
     );
-
     const io = req.app.get("io");
 
-    const receiverSocketId = onlineUsers.get(receiverId.toString());
+    if (message.conversation.isGroup) {
+      const groupId = String(message.conversation._id);
 
-    // Send only to receiver
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("receiveMessage", message);
+      // Send message to all group members
+      io.to(groupId).emit("receiveMessage", message);
+    } else {
+      // ONE-TO-ONE — DO NOT CHANGE
+      const receiverSocketId = onlineUsers.get(receiverId.toString());
+
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("receiveMessage", message);
+      }
     }
 
     res.status(201).json({
@@ -39,6 +51,8 @@ export const sendMessage = async (req, res) => {
       data: message,
     });
   } catch (error) {
+    console.log("SEND MESSAGE ERROR:", error.message);
+
     res.status(400).json({
       success: false,
       message: error.message,
@@ -46,16 +60,22 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-
 export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
 
-    const messages = await getMessagesService(conversationId);
+    const { limit = 20, before = null } = req.query;
+
+    const result = await getMessagesService(
+      conversationId,
+      Number(limit),
+      before,
+    );
 
     res.status(200).json({
       success: true,
-      messages,
+      messages: result.messages,
+      hasMore: result.hasMore,
     });
   } catch (error) {
     res.status(500).json({
@@ -64,28 +84,33 @@ export const getMessages = async (req, res) => {
     });
   }
 };
-
 export const markMessagesSeen = async (req, res) => {
   try {
-    const messages = await markMessagesSeenService(
-      req.params.conversationId,
-      req.user._id,
-    );
+    const conversationId = req.params.conversationId;
+    const userId = req.user._id;
 
-    const senderMessage = messages.find(
-      (message) => message.sender.toString() !== req.user._id.toString(),
-    );
+    const messages = await markMessagesSeenService(conversationId, userId);
 
-    if (senderMessage) {
-      const io = req.app.get("io");
+    const io = req.app.get("io");
 
-      const senderSocketId = onlineUsers.get(senderMessage.sender.toString());
+    if (messages.length > 0) {
+      const messageIds = messages.map((message) => String(message._id));
 
-      if (senderSocketId) {
-        io.to(senderSocketId).emit("messagesSeen", {
-          conversationId: req.params.conversationId,
-        });
-      }
+      const senderIds = [
+        ...new Set(messages.map((message) => String(message.sender))),
+      ];
+
+      senderIds.forEach((senderId) => {
+        const senderSocketId = onlineUsers.get(senderId);
+
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("messagesSeen", {
+            conversationId: String(conversationId),
+            userId: String(userId),
+            messageIds,
+          });
+        }
+      });
     }
 
     res.json({
@@ -93,7 +118,7 @@ export const markMessagesSeen = async (req, res) => {
       messages,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Mark seen error:", error);
 
     res.status(400).json({
       success: false,

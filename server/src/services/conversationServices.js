@@ -1,9 +1,6 @@
 import Conversation from "../models/conversationModel.js";
 import Message from "../models/messageModal.js";
-export const createOrGetConversationService = async (
-  senderId,
-  receiverId
-) => {
+export const createOrGetConversationService = async (senderId, receiverId) => {
   let conversation = await Conversation.findOne({
     isGroup: false,
     participants: {
@@ -22,7 +19,7 @@ export const createOrGetConversationService = async (
 
   return await Conversation.findById(conversation._id).populate(
     "participants",
-    "-password"
+    "-password",
   );
 };
 
@@ -31,28 +28,35 @@ export const getMyConversationsService = async (userId) => {
     participants: userId,
   })
     .populate("participants", "-password")
+    .populate("admin", "-password")
     .populate({
       path: "lastMessage",
       populate: {
         path: "sender",
-        select: "name",
+        select: "name profileImage",
       },
     })
-    .sort({ updatedAt: -1 });
+    .sort({
+      updatedAt: -1,
+    });
 
   const conversationsWithUnread = await Promise.all(
     conversations.map(async (conversation) => {
       const unreadCount = await Message.countDocuments({
         conversation: conversation._id,
-        sender: { $ne: userId }, // messages sent by the other user
-        seen: false,
+        sender: {
+          $ne: userId,
+        },
+        seenBy: {
+          $ne: userId,
+        },
       });
 
       return {
         ...conversation.toObject(),
         unreadCount,
       };
-    })
+    }),
   );
 
   return conversationsWithUnread;

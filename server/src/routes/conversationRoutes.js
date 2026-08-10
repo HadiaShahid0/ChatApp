@@ -3,7 +3,8 @@ import {
   createOrGetConversation,
   getMyConversations,
 } from "../controllers/conversationController/conversationController.js";
-import  protect from "../middleware/authMiddleware/authMiddleware.js";
+
+import protect from "../middleware/authMiddleware/authMiddleware.js";
 
 const router = express.Router();
 

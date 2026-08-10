@@ -21,19 +21,7 @@ const AppLayout = () => {
       navigate("/login");
     }
   };
-  useEffect(() => {
-    if (!user) return;
 
-    if (!socket.connected) {
-      socket.connect();
-    }
-
-    socket.emit("join", user._id);
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [user]);
   // Load logged-in user
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -50,17 +38,29 @@ const AppLayout = () => {
 
     socket.emit("join", user._id);
 
-    socket.on("connect", () => {
+    const onConnect = () => {
       console.log("Socket Connected:", socket.id);
-    });
+    };
 
-    socket.on("disconnect", () => {
+    const onDisconnect = () => {
       console.log("Socket Disconnected");
-    });
+    };
+    const profileUpdatedHandler = ({ user: updatedUser }) => {
+      if (updatedUser._id !== user._id) return;
 
+      setUser((prev) => ({
+        ...prev,
+        ...updatedUser,
+      }));
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("profileUpdated", profileUpdatedHandler);
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("profileUpdated", profileUpdatedHandler);
     };
   }, [user]);
 
