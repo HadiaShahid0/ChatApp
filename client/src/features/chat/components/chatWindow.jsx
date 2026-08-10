@@ -105,8 +105,40 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
   };
   const addSentMessage = (message) => {
     setMessages((prev) => {
-      if (prev.some((m) => String(m._id) === String(message._id))) {
-        return prev;
+      const exists = prev.some(
+        (msg) => String(msg._id) === String(message._id),
+      );
+
+      if (exists) {
+        return prev.map((msg) => {
+          if (String(msg._id) !== String(message._id)) {
+            return msg;
+          }
+
+          return {
+            ...msg,
+            ...message,
+
+            // Never lose delivery updates already received.
+            deliveredTo: [
+              ...new Map(
+                [
+                  ...(msg.deliveredTo || []),
+                  ...(message.deliveredTo || []),
+                ].map((id) => [String(id?._id || id), id]),
+              ).values(),
+            ],
+
+            seenBy: [
+              ...new Map(
+                [...(msg.seenBy || []), ...(message.seenBy || [])].map((id) => [
+                  String(id?._id || id),
+                  id,
+                ]),
+              ).values(),
+            ],
+          };
+        });
       }
 
       return [...prev, message];
@@ -125,7 +157,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
       if (!response.success) return;
 
       addSentMessage(response.data);
-
+      console.log("SEND MESSAGE RESPONSE:", response);
       //   socket.emit("newGroupMessage", {
       //     groupId: conversation._id,
       //     message: response.data,

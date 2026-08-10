@@ -15,7 +15,6 @@ const socketHelper = (server) => {
 
   io.on("connection", (socket) => {
     // USER JOIN
-    
     socket.on("join", async (userId) => {
       try {
         // Personal room
@@ -76,17 +75,12 @@ const socketHelper = (server) => {
     });
 
     // GROUP EVENTS
-
     socket.on("joinGroup", ({ groupId }) => {
       socket.join(groupId);
-
-      console.log(`Socket ${socket.id} joined group ${groupId}`);
     });
 
     socket.on("leaveGroup", ({ groupId }) => {
       socket.leave(groupId);
-
-      console.log(`Socket ${socket.id} left group ${groupId}`);
     });
 
     // Add member to group room
@@ -201,7 +195,16 @@ const socketHelper = (server) => {
       }
     });
 
-    socket.on("stopTyping", ({ receiverId, senderId }) => {
+    socket.on("stopTyping", ({ receiverId, senderId, groupId }) => {
+      // If groupId is provided, emit typing to the group room
+      if (groupId) {
+        io.to(groupId).emit("stopTyping", {
+          groupId,
+          senderId,
+        });
+        return;
+      }
+
       const receiverSocket = onlineUsers.get(receiverId);
 
       if (receiverSocket) {
@@ -261,12 +264,14 @@ const socketHelper = (server) => {
     // MESSAGE DELIVERED
     socket.on("messageDelivered", async ({ messageId, userId }) => {
       try {
-        const message = await Message.findById(messageId).populate(
-          "conversation",
-          "isGroup participants",
-        );
+        console.log("DELIVERY RECEIVED:", messageId, userId);
 
-        if (!message) return;
+        const message = await Message.findById(messageId);
+
+        if (!message) {
+          console.log("MESSAGE NOT FOUND");
+          return;
+        }
 
         const alreadyDelivered = message.deliveredTo.some(
           (id) => String(id) === String(userId),
@@ -274,32 +279,27 @@ const socketHelper = (server) => {
 
         if (!alreadyDelivered) {
           message.deliveredTo.push(userId);
+
           await message.save();
         }
-        if (message.conversation?.isGroup) {
-          const senderSocket = onlineUsers.get(message.sender.toString());
 
-          if (senderSocket) {
-            io.to(senderSocket).emit("messageDelivered", {
-              messageId: message._id.toString(),
-              userId: userId.toString(),
-            });
-          }
+        console.log("DELIVERED TO:", message.deliveredTo);
 
-          return;
-        }
+        // Send delivery update ONLY to sender
+        const senderSocketId = onlineUsers.get(String(message.sender));
 
-     
-        const senderSocket = onlineUsers.get(message.sender.toString());
+        console.log("SENDER SOCKET:", senderSocketId);
 
-        if (senderSocket) {
-          io.to(senderSocket).emit("messageDelivered", {
-            messageId: message._id.toString(),
-            userId: userId.toString(),
+        if (senderSocketId) {
+          io.to(senderSocketId).emit("messageDelivered", {
+            messageId: String(message._id),
+            userId: String(userId),
           });
+
+          console.log("DELIVERY SENT TO SENDER");
         }
-      } catch (err) {
-        console.error("Delivery error:", err);
+      } catch (error) {
+        console.error("Delivery error:", error);
       }
     });
   });

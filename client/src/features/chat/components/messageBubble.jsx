@@ -35,7 +35,11 @@ const MessageBubble = ({ message, currentUser, isGroup, conversation }) => {
     hour: "2-digit",
     minute: "2-digit",
   });
-
+  console.log("MESSAGE DELIVERY STATE:", {
+    messageId: message._id,
+    deliveredTo: message.deliveredTo,
+    participants: conversation?.participants,
+  });
   return (
     <>
       <div

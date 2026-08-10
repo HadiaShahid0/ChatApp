@@ -56,6 +56,7 @@ export const sendMessage = async ({
   groupId = null,
   text = "",
 }) => {
+  
   const response = await fetch(`${BASE_URL}/messages`, {
     method: "POST",
     credentials: "include",

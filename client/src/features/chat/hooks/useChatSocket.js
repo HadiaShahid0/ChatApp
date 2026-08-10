@@ -160,7 +160,7 @@ const useChatSocket = ({
       );
     };
     const deliveredHandler = ({ messageId, userId }) => {
-      if (!messageId || !userId) return;
+      console.log("DELIVERY UPDATE RECEIVED BY SENDER:", messageId, userId);
 
       setMessages((prev) =>
         prev.map((msg) => {
@@ -169,7 +169,7 @@ const useChatSocket = ({
           }
 
           const deliveredTo = Array.isArray(msg.deliveredTo)
-            ? msg.deliveredTo
+            ? [...msg.deliveredTo]
             : [];
 
           const alreadyDelivered = deliveredTo.some(
@@ -179,6 +179,8 @@ const useChatSocket = ({
           if (alreadyDelivered) {
             return msg;
           }
+
+          console.log("ADDING DELIVERY USER:", userId);
 
           return {
             ...msg,

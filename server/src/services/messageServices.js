@@ -10,10 +10,10 @@ export const sendMessageService = async (
   groupId = null,
 ) => {
   let conversation;
-
+  
   if (groupId) {
     conversation = await Conversation.findById(groupId);
-
+    
     if (!conversation) {
       throw new Error("Group not found.");
     }
@@ -33,6 +33,7 @@ export const sendMessageService = async (
     deliveredTo: [senderId],
     seenBy: [senderId],
   });
+  console.log("MESSAGE FROM SERVICE:", message);
 
   const totalMembers = conversation.participants.filter(
     (id) => id.toString() !== senderId.toString(),
@@ -97,11 +98,9 @@ export const getMessagesService = async (
     .limit(Number(limit));
 
   // We fetched newest → oldest,
-  // but frontend needs oldest → newest
   messages.reverse();
 
   // If we received less than the limit,
-  // there are no more older messages.
   const hasMore = messages.length === Number(limit);
 
   return {

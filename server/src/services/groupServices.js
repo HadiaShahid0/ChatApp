@@ -1,5 +1,7 @@
 import Conversation from "../models/conversationModel.js";
 import Message from "../models/messageModal.js";
+
+
 export const createGroupService = async (
   groupName,
   adminId,
@@ -18,13 +20,9 @@ export const createGroupService = async (
 
   const group = await Conversation.create({
     participants: uniqueMembers,
-
     isGroup: true,
-
     groupName,
-
     groupImage,
-
     admin: adminId,
   });
 

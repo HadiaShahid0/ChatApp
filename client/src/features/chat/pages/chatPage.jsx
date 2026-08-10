@@ -172,6 +172,7 @@ const Chat = () => {
     };
   }, []);
   useEffect(() => {
+    //online
     const handleUserOnline = (userId) => {
       setConversations((prev) =>
         prev.map((conversation) => ({

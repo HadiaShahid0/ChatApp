@@ -5,9 +5,12 @@ import {
 } from "../../services/messageServices.js";
 import Conversation from "../../models/conversationModel.js";
 import { onlineUsers } from "../../utils/socketHelper.js";
-
+import Message from "../../models/messageModal.js";
 export const sendMessage = async (req, res) => {
   try {
+    console.log("REQ BODY:", req.body);
+    console.log("REQ USER:", req.user?._id);
+    console.log("REQ FILE:", req.file);
     const { receiverId, groupId, text } = req.body;
 
     if (!receiverId && !groupId) {
@@ -27,49 +30,15 @@ export const sendMessage = async (req, res) => {
       image,
       groupId,
     );
-
     const io = req.app.get("io");
 
     if (message.conversation.isGroup) {
       const groupId = String(message.conversation._id);
 
-      // Send message to everyone in the group
+      // Send message to all group members
       io.to(groupId).emit("receiveMessage", message);
-
-      const participants = message.conversation.participants || [];
-
-      const onlineMemberIds = participants
-        .map((member) => String(member._id || member))
-        .filter(
-          (memberId) =>
-            memberId !== String(req.user._id) && onlineUsers.has(memberId),
-        );
-
-      // Mark only ONLINE members as delivered
-      if (onlineMemberIds.length > 0) {
-        await Message.findByIdAndUpdate(message._id, {
-          $addToSet: {
-            deliveredTo: {
-              $each: onlineMemberIds,
-            },
-          },
-        });
-
-        // Notify sender about each delivered member
-        const senderSocketId = onlineUsers.get(String(req.user._id));
-
-        if (senderSocketId) {
-          onlineMemberIds.forEach((userId) => {
-            io.to(senderSocketId).emit("messageDelivered", {
-              messageId: String(message._id),
-              userId: String(userId),
-            });
-          });
-        }
-      }
     } else {
-      // ONE-TO-ONE
-
+      // ONE-TO-ONE — DO NOT CHANGE
       const receiverSocketId = onlineUsers.get(receiverId.toString());
 
       if (receiverSocketId) {
@@ -82,6 +51,8 @@ export const sendMessage = async (req, res) => {
       data: message,
     });
   } catch (error) {
+    console.log("SEND MESSAGE ERROR:", error.message);
+
     res.status(400).json({
       success: false,
       message: error.message,
