@@ -16,17 +16,17 @@ const GroupInfoModal = ({
   const [groupData, setGroupData] = useState(group);
   const [showAddMember, setShowAddMember] = useState(false);
 
-  // =========================
+  
   // UPDATE GROUP DATA
-  // =========================
+  
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setGroupData(group);
   }, [group]);
 
-  // =========================
+  
   // GROUP MEMBER REMOVED
-  // =========================
+  
   useEffect(() => {
     const handleMemberRemoved = ({ group }) => {
       if (!groupData) return;
@@ -43,9 +43,9 @@ const GroupInfoModal = ({
     };
   }, [groupData]);
 
-  // =========================
+  
   // GROUP UPDATED
-  // =========================
+  
   useEffect(() => {
     const groupUpdatedHandler = ({ group }) => {
       if (!groupData) return;
@@ -62,9 +62,9 @@ const GroupInfoModal = ({
     };
   }, [groupData]);
 
-  // =========================
+  
   // NOW SAFE TO CHECK
-  // =========================
+  
   if (!groupData) {
     return null;
   }
@@ -72,9 +72,9 @@ const GroupInfoModal = ({
   const isAdmin =
     currentUser?._id === groupData?.admin?._id;
 
-  // =========================
+  
   // REMOVE MEMBER
-  // =========================
+  
   const handleRemove = async (memberId) => {
   try {
     const res = await removeMember(groupData._id, memberId);
@@ -96,9 +96,9 @@ const GroupInfoModal = ({
   }
 };
 
-  // =========================
+  
   // LEAVE GROUP
-  // =========================
+  
   const handleLeaveGroup = async () => {
     const confirmed = window.confirm(
       "Are you sure you want to leave this group?"
@@ -121,9 +121,9 @@ const GroupInfoModal = ({
     }
   };
 
-  // =========================
+  
   // DELETE GROUP
-  // =========================
+  
   const handleDeleteGroup = async () => {
     const confirmed = window.confirm(
       "Are you sure you want to permanently delete this group?"

@@ -104,7 +104,14 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
     });
   };
   const addSentMessage = (message) => {
-    setMessages((prev) => [...prev, message]);
+    setMessages((prev) => {
+      if (prev.some((m) => String(m._id) === String(message._id))) {
+        return prev;
+      }
+
+      return [...prev, message];
+    });
+
     updateConversation(message);
   };
   const handleSend = async (text) => {
@@ -304,7 +311,7 @@ const ChatWindow = ({ currentUser, selectedUser, setConversations }) => {
             message={msg}
             currentUser={currentUser}
             isGroup={conversation?.isGroup}
-            group={conversation}
+            conversation={conversation}
           />
         ))}
 

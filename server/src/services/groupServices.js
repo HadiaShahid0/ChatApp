@@ -105,6 +105,10 @@ export const sendGroupMessageService = async (
     sender: senderId,
     text,
     image,
+
+    // Sender has already delivered and seen their own message
+    deliveredTo: [senderId],
+    seenBy: [senderId],
   });
 
   conversation.lastMessage = message._id;
@@ -112,7 +116,13 @@ export const sendGroupMessageService = async (
 
   return await Message.findById(message._id)
     .populate("sender", "-password")
-    .populate("conversation");
+    .populate({
+      path: "conversation",
+      populate: {
+        path: "participants",
+        select: "name profileImage status",
+      },
+    });
 };
 
 export const leaveGroupService = async (groupId, userId) => {

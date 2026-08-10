@@ -103,35 +103,35 @@ export const removeMember = async (req, res) => {
     });
   }
 };
-export const sendGroupMessage = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const { text } = req.body;
+// export const sendGroupMessage = async (req, res) => {
+//   try {
+//     const { groupId } = req.params;
+//     const { text } = req.body;
 
-    const image = req.file ? `uploads/chat/${req.file.filename}` : "";
+//     const image = req.file ? `uploads/chat/${req.file.filename}` : "";
 
-    const message = await sendGroupMessageService(
-      req.user._id,
-      groupId,
-      text || "",
-      image,
-    );
+//     const message = await sendGroupMessageService(
+//       req.user._id,
+//       groupId,
+//       text || "",
+//       image,
+//     );
 
-    const io = req.app.get("io");
+//     const io = req.app.get("io");
 
-    io.to(groupId).emit("newGroupMessage", message);
+//     io.to(groupId).emit("newGroupMessage", message);
 
-    res.status(201).json({
-      success: true,
-      data: message,
-    });
-  } catch (err) {
-    res.status(400).json({
-      success: false,
-      message: err.message,
-    });
-  }
-};
+//     res.status(201).json({
+//       success: true,
+//       data: message,
+//     });
+//   } catch (err) {
+//     res.status(400).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
+// };
 
 export const leaveGroup = async (req, res) => {
   try {
@@ -144,45 +144,31 @@ export const leaveGroup = async (req, res) => {
       throw new Error("Group not found.");
     }
 
-    const wasAdmin =
-      oldGroup.admin.toString() === userId.toString();
+    const wasAdmin = oldGroup.admin.toString() === userId.toString();
 
-    const updatedGroup = await leaveGroupService(
-      groupId,
-      userId
-    );
+    const updatedGroup = await leaveGroupService(groupId, userId);
 
     const io = req.app.get("io");
 
-    // =========================
     // GET LEAVING USER SOCKET
-    // =========================
 
-    const userSocketId = onlineUsers.get(
-      userId.toString()
-    );
+    const userSocketId = onlineUsers.get(userId.toString());
 
     if (userSocketId) {
-      const userSocket = io.sockets.sockets.get(
-        userSocketId
-      );
+      const userSocket = io.sockets.sockets.get(userSocketId);
 
       if (userSocket) {
         userSocket.leave(groupId.toString());
       }
     }
 
-    // =========================
     // TELL LEAVING USER
-    // =========================
 
     io.to(userId.toString()).emit("groupLeft", {
       groupId: groupId.toString(),
     });
 
-    // =========================
     // TELL REMAINING MEMBERS
-    // =========================
 
     io.to(groupId.toString()).emit("groupUpdated", {
       group: updatedGroup,
@@ -193,7 +179,6 @@ export const leaveGroup = async (req, res) => {
       success: true,
       group: updatedGroup,
     });
-
   } catch (error) {
     res.status(400).json({
       success: false,

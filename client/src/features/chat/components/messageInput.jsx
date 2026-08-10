@@ -1,52 +1,59 @@
-import { useState,useEffect } from "react";
+import { useState, useEffect } from "react";
 import socket from "../../../services/socket";
 import { BsImage, BsX } from "react-icons/bs";
 
-const MessageInput = ({ onSend, onImageSend, selectedUser, currentUser,conversation }) => {
+const MessageInput = ({
+  onSend,
+  onImageSend,
+  selectedUser,
+  currentUser,
+  conversation,
+}) => {
   const [text, setText] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [preview, setPreview] = useState("");
-  
-const handleChange = (e) => {
-  const value = e.target.value;
-  setText(value);
 
-  clearTimeout(window.typingTimer);
-
-  if (!value.trim()) {
-    socket.emit("stopTyping", {
-      receiverId: selectedUser._id,
-      senderId: currentUser._id,
-    });
-    return;
-  }
-
-  socket.emit("typing",{
-    receiverId: conversation.isGroup ? null : selectedUser._id,
-    groupId: conversation.isGroup ? conversation._id : null,
-    senderId: currentUser._id,
-    sender: currentUser.name
-});
-
-  window.typingTimer = setTimeout(() => {
-    socket.emit("stopTyping", {
-      receiverId: selectedUser._id,
-      senderId: currentUser._id,
-    });
-  }, 1000);
-};
-useEffect(() => {
-  return () => {
-    if (!selectedUser || !currentUser) return;
-
-    socket.emit("stopTyping", {
-      receiverId: selectedUser._id,
-      senderId: currentUser._id,
-    });
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setText(value);
 
     clearTimeout(window.typingTimer);
+
+    if (!value.trim()) {
+      socket.emit("stopTyping", {
+        receiverId: selectedUser._id,
+        senderId: currentUser._id,
+      });
+      return;
+    }
+
+    socket.emit("typing", {
+      receiverId: conversation.isGroup ? null : selectedUser._id,
+      groupId: conversation.isGroup ? conversation._id : null,
+      senderId: currentUser._id,
+      sender: currentUser.name,
+    });
+
+    window.typingTimer = setTimeout(() => {
+      socket.emit("stopTyping", {
+        receiverId: selectedUser._id,
+        senderId: currentUser._id,
+        groupId: conversation.isGroup ? conversation._id : null,
+      });
+    }, 1000);
   };
-}, [selectedUser, currentUser]);
+  useEffect(() => {
+    return () => {
+      if (!selectedUser || !currentUser) return;
+
+      socket.emit("stopTyping", {
+        receiverId: selectedUser._id,
+        senderId: currentUser._id,
+      });
+
+      clearTimeout(window.typingTimer);
+    };
+  }, [selectedUser, currentUser]);
   const handleSubmit = async (e) => {
     e.preventDefault();
 

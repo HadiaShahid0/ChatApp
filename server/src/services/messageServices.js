@@ -30,11 +30,10 @@ export const sendMessageService = async (
     sender: senderId,
     text,
     image,
-
-    // Sender has already received and seen their own message
     deliveredTo: [senderId],
     seenBy: [senderId],
   });
+
   const totalMembers = conversation.participants.filter(
     (id) => id.toString() !== senderId.toString(),
   ).length;
@@ -111,34 +110,33 @@ export const getMessagesService = async (
   };
 };
 
-export const markMessagesSeenService = async (conversationId, userId) => {
+export const markMessagesSeenService = async (
+  conversationId,
+  userId,
+) => {
   const messages = await Message.find({
     conversation: conversationId,
     sender: { $ne: userId },
+    seenBy: { $ne: userId },
   });
 
-  const newlySeenMessages = [];
-
-  for (const message of messages) {
-    let changed = false;
-
-    if (
-      !message.deliveredTo.some((id) => id.toString() === userId.toString())
-    ) {
-      message.deliveredTo.push(userId);
-      changed = true;
-    }
-
-    if (!message.seenBy.some((id) => id.toString() === userId.toString())) {
-      message.seenBy.push(userId);
-      changed = true;
-    }
-
-    if (changed) {
-      await message.save();
-      newlySeenMessages.push(message);
-    }
+  if (!messages.length) {
+    return [];
   }
 
-  return newlySeenMessages;
+  await Message.updateMany(
+    {
+      _id: {
+        $in: messages.map((message) => message._id),
+      },
+    },
+    {
+      $addToSet: {
+        deliveredTo: userId,
+        seenBy: userId,
+      },
+    },
+  );
+
+  return messages;
 };

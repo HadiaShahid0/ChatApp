@@ -21,27 +21,61 @@ const useChatSocket = ({
         setConversation(group);
       }
     };
-    const receiveGroupMessage = async (message) => {
-      // Update sidebar
+
+    // Socket event listeners for events like receiving messages, typing indicators, and message delivery confirmations
+    const receiveMessage = async (message) => {
       updateConversation(message);
 
-      // Don't process our own message as received
+      // Don't process our own message
       if (String(message.sender?._id) === String(currentUser._id)) {
         return;
       }
 
-      // Only process if this is the currently opened conversation
-      if (String(conversation?._id) !== String(message.conversation?._id)) {
-        // Still mark it delivered even if the group chat isn't open
+      if (message.conversation?.isGroup) {
+        // Tell server that this user received the group message
         socket.emit("messageDelivered", {
           messageId: message._id,
           userId: currentUser._id,
         });
 
+        // If this group isn't currently open,
+        // don't mark it as seen.
+        if (String(conversation?._id) !== String(message.conversation?._id)) {
+          return;
+        }
+
+        setMessages((prev) => {
+          if (prev.some((m) => String(m._id) === String(message._id))) {
+            return prev;
+          }
+
+          return [...prev, message];
+        });
+
+        if (document.visibilityState === "visible") {
+          try {
+            await markSeen(message.conversation._id);
+          } catch (error) {
+            console.error("Group mark seen error:", error);
+          }
+        }
+
         return;
       }
 
-      // Add message to current chat
+      // ONE-TO-ONE
+      // KEEP YOUR EXISTING CODE EXACTLY AS IT IS
+
+      socket.emit("messageDelivered", {
+        conversationId: message.conversation._id,
+        messageId: message._id,
+        userId: currentUser._id,
+      });
+
+      if (String(conversation?._id) !== String(message.conversation?._id)) {
+        return;
+      }
+
       setMessages((prev) => {
         if (prev.some((m) => String(m._id) === String(message._id))) {
           return prev;
@@ -50,51 +84,7 @@ const useChatSocket = ({
         return [...prev, message];
       });
 
-      // Mark delivered
-      socket.emit("messageDelivered", {
-        messageId: message._id,
-        userId: currentUser._id,
-      });
-
-      // Mark seen only if chat is visible
       if (document.visibilityState === "visible") {
-        try {
-          await markSeen(message.conversation._id);
-
-          socket.emit("messagesSeen", {
-            conversationId: message.conversation._id,
-            userId: currentUser._id,
-          });
-        } catch (error) {
-          console.log("Group seen error:", error);
-        }
-      }
-    };
-    // Socket event listeners for events like receiving messages, typing indicators, and message delivery confirmations
-    const receiveMessage = async (message) => {
-      updateConversation(message);
-
-      if (message.sender._id === currentUser._id) {
-        return;
-      }
-
-      socket.emit("messageDelivered", {
-        messageId: message._id,
-        userId: currentUser._id,
-      });
-
-      if (conversation?._id !== message.conversation._id) return;
-
-      setMessages((prev) => {
-        if (prev.some((m) => m._id === message._id)) return prev;
-
-        return [...prev, message];
-      });
-
-      if (
-        conversation?._id === message.conversation._id &&
-        document.visibilityState === "visible"
-      ) {
         await markSeen(message.conversation._id);
 
         socket.emit("messagesSeen", {
@@ -104,7 +94,6 @@ const useChatSocket = ({
         });
       }
     };
-
     const typingHandler = ({ senderId, groupId, sender }) => {
       if (!conversation) return;
 
@@ -136,7 +125,7 @@ const useChatSocket = ({
 
     const seenHandler = ({ conversationId, userId, messageIds }) => {
       if (
-        conversationId !== conversation?._id ||
+        String(conversationId) !== String(conversation?._id) ||
         !userId ||
         !Array.isArray(messageIds)
       ) {
@@ -145,14 +134,18 @@ const useChatSocket = ({
 
       setMessages((prev) =>
         prev.map((msg) => {
-          if (!messageIds.includes(msg._id)) {
+          const isSeenMessage = messageIds.some(
+            (id) => String(id) === String(msg._id),
+          );
+
+          if (!isSeenMessage) {
             return msg;
           }
 
-          const seenBy = msg.seenBy || [];
+          const seenBy = Array.isArray(msg.seenBy) ? msg.seenBy : [];
 
           const alreadySeen = seenBy.some(
-            (id) => id && id.toString() === userId.toString(),
+            (id) => String(id?._id || id) === String(userId),
           );
 
           if (alreadySeen) {
@@ -176,7 +169,7 @@ const useChatSocket = ({
           }
 
           const deliveredTo = Array.isArray(msg.deliveredTo)
-            ? msg.deliveredTo.filter(Boolean)
+            ? msg.deliveredTo
             : [];
 
           const alreadyDelivered = deliveredTo.some(
@@ -261,7 +254,6 @@ const useChatSocket = ({
     socket.on("stopTyping", stopTypingHandler);
     socket.on("messagesSeen", seenHandler);
     socket.on("messageDelivered", deliveredHandler);
-    socket.on("newGroupMessage", receiveGroupMessage);
     socket.on("groupUpdated", groupUpdatedHandler);
     socket.on("addMember", memberAddedHandler);
     socket.on("memberRemoved", memberRemovedHandler);
@@ -271,7 +263,6 @@ const useChatSocket = ({
     return () => {
       socket.off("removedFromGroup", removedFromGroupHandler);
       socket.off("newGroupCreated", newGroupCreatedHandler);
-      socket.off("newGroupMessage", receiveGroupMessage);
       socket.off("receiveMessage", receiveMessage);
       socket.off("typing", typingHandler);
       socket.off("stopTyping", stopTypingHandler);
